@@ -8,7 +8,7 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/godyl
+  - main: ./cmd/gonc
 
     env:
       - CGO_ENABLED=0
