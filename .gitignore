@@ -1,0 +1,15 @@
+# Binary
+gonc
+
+# Test files
+*.enc
+*.dec
+
+# Go files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out

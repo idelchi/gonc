@@ -1,0 +1,21 @@
+services:
+  build:
+    build:
+      args:
+        - GONC_VERSION=local
+      target: build
+    pull_policy: if_not_present
+    container_name: gonc
+    hostname: gonc
+    volumes:
+      - .:/home/user/ws
+    extra_hosts:
+      - host:host-gateway
+    working_dir: /home/user/ws
+    networks:
+      - gonc-network
+
+networks:
+  gonc-network:
+    name: gonc-network
+    driver: bridge
