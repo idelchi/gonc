@@ -1,0 +1,44 @@
+name: gonc
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - main
+    tags:
+      - "*"
+
+jobs:
+  info:
+    uses: idelchi/devenv/.github/workflows/info.yml@dev
+
+  next-tag:
+    uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: info
+
+  prerelease:
+    uses: idelchi/devenv/.github/workflows/prerelease.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: next-tag
+    permissions:
+      contents: write
+      actions: write
+    with:
+      tag: ${{ needs.next-tag.outputs.next }}-beta
+
+  release:
+    uses: idelchi/devenv/.github/workflows/gorelease.yml@dev
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: info
+    permissions:
+      contents: write
+
+  cleanup:
+    uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
+    if: github.ref == 'refs/heads/dev' && always()
+    needs: release
+    permissions:
+      actions: write
