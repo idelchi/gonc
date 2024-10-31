@@ -1,3 +1,6 @@
+// Package encryption provides functionality for file encryption and decryption using AES
+// in either CBC or ECB mode. It supports concurrent processing of multiple files with
+// configurable parallelism.
 package encryption
 
 import (
@@ -18,16 +21,19 @@ import (
 )
 
 const (
+	// defaultBufferSize defines the size of the buffer used for file I/O operations.
 	defaultBufferSize = 32 * 1024 // 32KB default buffer size
 )
 
 var (
+	// blockPool provides a pool of reusable byte slices for block encryption operations.
 	blockPool = sync.Pool{
 		New: func() interface{} {
 			return make([]byte, aes.BlockSize)
 		},
 	}
 
+	// bufferPool provides a pool of reusable byte slices for file I/O operations.
 	bufferPool = sync.Pool{
 		New: func() interface{} {
 			return make([]byte, defaultBufferSize)
@@ -35,16 +41,92 @@ var (
 	}
 )
 
+// CipherMode represents the encryption mode to be used (CBC or ECB).
 type CipherMode byte
 
 const (
+	// ModeCBC represents Cipher Block Chaining mode.
 	ModeCBC CipherMode = iota
+	// ModeECB represents Electronic Code Book mode.
 	ModeECB
 )
 
-// Add a small header to identify the encryption mode and executable bit
+// Result represents the outcome of processing a single file.
+type Result struct {
+	Input  string // Input file path
+	Output string // Output file path
+	Error  error  // Any error that occurred during processing
+}
+
+// Processor handles the encryption and decryption of files.
+type Processor struct {
+	cfg     config.Config // Configuration for the processor
+	cipher  cipher.Block  // AES cipher block
+	results chan Result   // Channel for collecting processing results
+}
+
+// NewProcessor creates a new Processor with the given configuration.
+// It initializes the AES cipher using the provided key.
+func NewProcessor(cfg config.Config) (*Processor, error) {
+	key, err := hex.DecodeString(cfg.Key)
+	if err != nil {
+		return nil, fmt.Errorf("decoding key: %w", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("creating cipher: %w", err)
+	}
+
+	return &Processor{
+		cfg:     cfg,
+		cipher:  block,
+		results: make(chan Result, len(cfg.Files)),
+	}, nil
+}
+
+// ProcessFiles concurrently processes all files specified in the configuration.
+// It encrypts or decrypts files based on the configuration settings.
+func (p *Processor) ProcessFiles() error {
+	g := new(errgroup.Group)
+	g.SetLimit(p.cfg.Parallel)
+
+	// Start result printer
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for result := range p.results {
+			if result.Error != nil {
+				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.Input, result.Error)
+			} else {
+				fmt.Printf("Processed %s -> %s\n", result.Input, result.Output)
+			}
+		}
+	}()
+
+	// Process files
+	for _, file := range p.cfg.Files {
+		file := file // Capture for closure
+		g.Go(func() error {
+			outPath := p.outputPath(file)
+			if err := p.processFile(file, outPath); err != nil {
+				p.results <- Result{Input: file, Error: err}
+				return err
+			}
+			p.results <- Result{Input: file, Output: outPath}
+			return nil
+		})
+	}
+
+	err := g.Wait()
+	close(p.results)
+	<-done // Wait for printer to finish
+	return err
+}
+
+// encrypt reads data from r, encrypts it using the configured mode,
+// and writes the result to w. The isExec parameter preserves the executable bit information.
 func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
-	// Get buffer from pool for reading
 	buf := bufferPool.Get().([]byte)
 	defer bufferPool.Put(buf)
 
@@ -89,7 +171,7 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 		ciphertext = append(iv, ciphertext...)
 	}
 
-	// Prepend mode identifier and executable bit
+	// Write header with mode and executable bit
 	header := []byte{byte(mode)}
 	if isExec {
 		header = append(header, 1)
@@ -97,12 +179,10 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 		header = append(header, 0)
 	}
 
-	// Write header
 	if _, err := w.Write(header); err != nil {
 		return fmt.Errorf("writing header: %w", err)
 	}
 
-	// Write encrypted data
 	if _, err := w.Write(ciphertext); err != nil {
 		return fmt.Errorf("writing encrypted data: %w", err)
 	}
@@ -110,8 +190,9 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 	return nil
 }
 
+// decrypt reads encrypted data from r, decrypts it using the mode specified in the header,
+// and writes the result to w. It returns whether the original file was executable.
 func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
-	// Read header
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(r, header); err != nil {
 		return false, fmt.Errorf("reading header: %w", err)
@@ -120,11 +201,9 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	mode := CipherMode(header[0])
 	isExec := header[1] == 1
 
-	// Get buffer from pool
 	buf := bufferPool.Get().([]byte)
 	defer bufferPool.Put(buf)
 
-	// Read all encrypted data
 	var data []byte
 	for {
 		n, err := r.Read(buf)
@@ -171,81 +250,14 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	}
 }
 
-type Result struct {
-	Input  string
-	Output string
-	Error  error
-}
-
-type Processor struct {
-	cfg     config.Config
-	cipher  cipher.Block
-	results chan Result
-}
-
-func NewProcessor(cfg config.Config) (*Processor, error) {
-	key, err := hex.DecodeString(cfg.Key)
-	if err != nil {
-		return nil, fmt.Errorf("decoding key: %w", err)
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, fmt.Errorf("creating cipher: %w", err)
-	}
-
-	return &Processor{
-		cfg:     cfg,
-		cipher:  block,
-		results: make(chan Result, len(cfg.Files)),
-	}, nil
-}
-
-func (p *Processor) ProcessFiles() error {
-	g := new(errgroup.Group)
-	g.SetLimit(p.cfg.Parallel)
-
-	// Start result printer
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for result := range p.results {
-			if result.Error != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.Input, result.Error)
-			} else {
-				fmt.Printf("Processed %s -> %s\n", result.Input, result.Output)
-			}
-		}
-	}()
-
-	// Process files
-	for _, file := range p.cfg.Files {
-		file := file // Capture for closure
-		g.Go(func() error {
-			outPath := p.outputPath(file)
-			if err := p.processFile(file, outPath); err != nil {
-				p.results <- Result{Input: file, Error: err}
-				return err
-			}
-			p.results <- Result{Input: file, Output: outPath}
-			return nil
-		})
-	}
-
-	// Wait for all processing to complete
-	err := g.Wait()
-	close(p.results)
-	<-done // Wait for printer to finish
-	return err
-}
-
+// processFile handles the encryption or decryption of a single file.
+// It creates a temporary file for output and performs an atomic rename on completion.
 func (p *Processor) processFile(filename, outPath string) error {
 	info, err := os.Stat(filename)
 	if err != nil {
 		return fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
-	// Check if file is executable (any execute bit is set)
 	isExec := info.Mode()&0o111 != 0
 
 	// Create temporary output file
@@ -261,7 +273,6 @@ func (p *Processor) processFile(filename, outPath string) error {
 		}
 	}()
 
-	// Open input file
 	inFile, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("opening input file: %w", err)
@@ -299,11 +310,13 @@ func (p *Processor) processFile(filename, outPath string) error {
 	return nil
 }
 
+// encryptECB encrypts data using ECB mode. Note that ECB mode is not
+// cryptographically secure and should only be used when deterministic
+// encryption is specifically required.
 func (p *Processor) encryptECB(data []byte) []byte {
 	ciphertext := make([]byte, len(data))
 	size := p.cipher.BlockSize()
 
-	// Get buffer from pool
 	buf := blockPool.Get().([]byte)
 	defer blockPool.Put(buf)
 
@@ -313,11 +326,11 @@ func (p *Processor) encryptECB(data []byte) []byte {
 	return ciphertext
 }
 
+// decryptECB decrypts data that was encrypted using ECB mode.
 func (p *Processor) decryptECB(data []byte) []byte {
 	plaintext := make([]byte, len(data))
 	size := p.cipher.BlockSize()
 
-	// Get buffer from pool
 	buf := blockPool.Get().([]byte)
 	defer blockPool.Put(buf)
 
@@ -327,10 +340,11 @@ func (p *Processor) decryptECB(data []byte) []byte {
 	return plaintext
 }
 
+// outputPath generates the output file path based on the input filename
+// and the configured suffixes for encryption/decryption.
 func (p *Processor) outputPath(filename string) string {
 	ext := p.cfg.EncryptSuffix
 	if p.cfg.Decrypt {
-		// Strip suffix
 		filename = strings.TrimSuffix(filename, p.cfg.EncryptSuffix)
 		ext = p.cfg.DecryptSuffix
 	}
@@ -339,13 +353,15 @@ func (p *Processor) outputPath(filename string) string {
 		filepath.Base(filename)+ext)
 }
 
-// PKCS7 padding implementation with improved error messages
+// pkcs7Pad adds PKCS#7 padding to the data to make it a multiple of blockSize.
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
 	return append(data, padText...)
 }
 
+// pkcs7Unpad removes PKCS#7 padding from the data.
+// It returns an error if the padding is invalid.
 func pkcs7Unpad(data []byte) ([]byte, error) {
 	length := len(data)
 	if length == 0 {
