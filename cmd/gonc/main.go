@@ -8,7 +8,6 @@ import (
 
 	"github.com/idelchi/gonc/internal/commands"
 	"github.com/idelchi/gonc/internal/config"
-	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -29,40 +28,8 @@ func run() error {
 
 	cfg := &config.Config{}
 
-	root := &cobra.Command{
-		Use:   "gonc",
-		Short: "File encryption utility",
-		Long: `A file encryption utility that supports deterministic and non-deterministic modes.
-Provides commands for key generation, encryption, and decryption.`,
-		Version:          version,
-		TraverseChildren: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Must provide a subcommand. Run 'gonc --help' for usage.")
-		},
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Configure Viper to read from environment variables
-			viper.SetEnvPrefix("gonc")
-			viper.AutomaticEnv()
-
-			// Bind all flags to viper with command prefix
-			if err := viper.BindPFlags(cmd.Root().Flags()); err != nil {
-				return fmt.Errorf("failed to bind flags: %w", err)
-			}
-
-			if err := viper.BindPFlags(cmd.Flags()); err != nil {
-				return fmt.Errorf("failed to bind persistent flags: %w", err)
-			}
-
-			// // Unmarshal the config into our struct
-			if err := viper.Unmarshal(cfg); err != nil {
-				return fmt.Errorf("failed to unmarshal config: %w", err)
-			}
-
-			return nil
-		},
-	}
-
-	root.CompletionOptions.DisableDefaultCmd = true
+	root := commands.NewRootCmd(cfg)
+	root.Version = version
 
 	// Add persistent flags - they'll be automatically bound by viper
 	root.Flags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
