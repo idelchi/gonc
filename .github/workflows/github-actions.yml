@@ -43,6 +43,8 @@ jobs:
   cleanup:
     uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
     if: github.ref == 'refs/heads/dev' && always()
-    needs: release
+    needs:
+      - prerelease
+      - release
     permissions:
       actions: write
