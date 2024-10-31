@@ -228,6 +228,7 @@ func (p *Processor) outputPath(filename string) string {
 		filename = strings.TrimSuffix(filename, p.cfg.EncryptSuffix)
 		ext = p.cfg.DecryptSuffix
 	}
+
 	return filepath.Join(filepath.Dir(filename),
 		filepath.Base(filename)+ext)
 }

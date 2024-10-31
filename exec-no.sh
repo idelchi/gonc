@@ -14,7 +14,6 @@ KEY=$(gonc generate)
 
 # Create a test executable file
 cat > test2.sh << 'EOF'
-#!/bin/bash
 echo "Hello, I am NOT executable!"
 EOF
 
@@ -39,24 +38,23 @@ if [ ! -f "test2.sh.enc" ]; then
 fi
 
 # Decrypt the file
-gonc -k "${KEY}" decrypt test2.sh.enc
+gonc --decrypt-ext .dec -k "${KEY}" decrypt test2.sh.enc
 
 # Verify decrypted file was created
-if [ ! -f "test2.sh" ]; then
+if [ ! -f "test2.sh.dec" ]; then
     echo "✗ Failed: Decrypted file was not created"
     exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test2.sh" ]; then
-    echo "✗ Failed: Decrypted file is still executable"
+if [ -x "test2.sh.dec" ]; then
+    echo "✗ Failed: Decrypted file is executable"
     exit 1
 else
-    echo "✓ Decrypted file lost executable bit"
+    echo "✓ Decrypted file has no executable bit"
 fi
 
-# Optional: Compare content
-if cmp -s <(tail -n +2 test2.sh) <(tail -n +2 test2.sh); then
+if cmp -s test2.sh.dec test2.sh; then
     echo "✓ File content preserved correctly"
 else
     echo "✗ Failed: File content changed"

@@ -10,7 +10,9 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-KEY=$(gonc generate)
+gonc generate > key
+
+KEY=$(cat key)
 
 # Create a test executable file
 cat > test.sh << 'EOF'
@@ -41,24 +43,24 @@ if [ ! -f "test.sh.enc" ]; then
 fi
 
 # Decrypt the file
-gonc -k "${KEY}" decrypt test.sh.enc
+gonc -k "${KEY}" --decrypt-ext .dec decrypt test.sh.enc
+
 
 # Verify decrypted file was created
-if [ ! -f "test.sh" ]; then
+if [ ! -f "test.sh.dec" ]; then
     echo "✗ Failed: Decrypted file was not created"
     exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test.sh" ]; then
+if [ -x "test.sh.dec" ]; then
     echo "✓ Decrypted file is still executable"
 else
     echo "✗ Failed: Decrypted file lost executable bit"
     exit 1
 fi
 
-# Optional: Compare content
-if cmp -s <(tail -n +2 test.sh) <(tail -n +2 test.sh); then
+if cmp -s test.sh.dec test.sh; then
     echo "✓ File content preserved correctly"
 else
     echo "✗ Failed: File content changed"
@@ -66,6 +68,6 @@ else
 fi
 
 # Cleanup
-rm -f test.sh test.sh.enc test.sh
+# rm -f test.sh test.sh.enc test.sh test.sh.dec
 
 echo "All tests passed!"

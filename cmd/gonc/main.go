@@ -72,16 +72,16 @@ Provides commands for key generation, encryption, and decryption.`,
 	encrypt := commands.NewEncryptCmd(cfg)
 	decrypt := commands.NewDecryptCmd(cfg)
 
-	encrypt.Flags().StringP("suffix", "s", ".enc", "Suffix to append to encrypted files")
-	decrypt.Flags().StringP("suffix", "s", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
+	root.Flags().String("encrypt-ext", ".enc", "Suffix to append to encrypted files")
+	root.Flags().String("decrypt-ext", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
 
-	gen.SetHelpFunc(func(command *cobra.Command, strings []string) {
-		// Hide flag for this command
-		command.Flags().MarkHidden("key")
-		command.Flags().MarkHidden("parallel")
-		// Call parent help func
-		command.Parent().HelpFunc()(command, strings)
-	})
+	// gen.SetHelpFunc(func(command *cobra.Command, strings []string) {
+	// 	// Hide flag for this command
+	// 	// command.Flags().MarkHidden("key")
+	// 	// command.Flags().MarkHidden("parallel")
+	// 	// Call parent help func
+	// 	command.Parent().HelpFunc()(command, strings)
+	// })
 
 	// Add commands
 	root.AddCommand(

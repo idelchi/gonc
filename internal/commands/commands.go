@@ -42,7 +42,7 @@ func NewEncryptCmd(cfg *config.Config) *cobra.Command {
 
 			err := runProcessor(cfg)
 
-			fmt.Println("goncilisious")
+			fmt.Println("goncilisious decryption")
 			return err
 		},
 	}
@@ -64,7 +64,7 @@ func NewDecryptCmd(cfg *config.Config) *cobra.Command {
 
 			err := runProcessor(cfg)
 
-			fmt.Println("goncilisious")
+			fmt.Println("goncilisious decryption")
 			return err
 		},
 	}
