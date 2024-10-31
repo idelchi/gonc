@@ -29,7 +29,7 @@ fi
 # Encrypt the file
 # Assuming your binary is called 'gonc' and in PATH
 # Replace with actual path if needed
-gonc -k "${KEY}" encrypt test2.sh
+gonc -k "${KEY}" encrypt test2.sh -d
 
 # Verify encrypted file was created
 if [ ! -f "test2.sh.enc" ]; then
