@@ -48,6 +48,8 @@ Provides commands for key generation, encryption, and decryption.`,
 
 	root.CompletionOptions.DisableDefaultCmd = true
 
+	root.SetVersionTemplate("{{ .Version }}\n")
+
 	return root
 }
 
