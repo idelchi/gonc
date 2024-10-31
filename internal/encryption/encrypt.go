@@ -167,7 +167,7 @@ func (p *Processor) ProcessFiles() error {
 func (p *Processor) processFile(filename, outPath string) error {
 	info, err := os.Stat(filename)
 	if err != nil {
-		return fmt.Errorf("getting file info: %w", err)
+		return fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
 	// Check if file is executable (any execute bit is set)
