@@ -30,12 +30,11 @@ const (
 	resultBuffer = 1000            // Buffer size for result channel
 )
 
-// Processor maintains the same public interface
 type Processor struct {
 	cfg     config.Config
 	cipher  cipher.Block
 	results chan Result
-	pool    sync.Pool // Pool for chunk buffers
+	pool    sync.Pool
 }
 
 type Result struct {
@@ -44,7 +43,6 @@ type Result struct {
 	Error  error
 }
 
-// NewProcessor maintains the same interface
 func NewProcessor(cfg config.Config) (*Processor, error) {
 	key, err := hex.DecodeString(cfg.Key)
 	if err != nil {
@@ -62,14 +60,12 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 		results: make(chan Result, resultBuffer),
 		pool: sync.Pool{
 			New: func() interface{} {
-				// Allocate chunk buffer with extra space for padding
 				return make([]byte, chunkSize+aes.BlockSize)
 			},
 		},
 	}, nil
 }
 
-// ProcessFiles maintains the same interface
 func (p *Processor) ProcessFiles() error {
 	g := new(errgroup.Group)
 	g.SetLimit(p.cfg.Parallel)
@@ -105,7 +101,6 @@ func (p *Processor) ProcessFiles() error {
 	return err
 }
 
-// processFileStreaming is a new implementation that processes files in chunks
 func (p *Processor) processFileStreaming(inPath, outPath string) error {
 	info, err := os.Stat(inPath)
 	if err != nil {
@@ -118,29 +113,45 @@ func (p *Processor) processFileStreaming(inPath, outPath string) error {
 	}
 	defer inFile.Close()
 
-	// Create output file with appropriate permissions
+	// Create temporary writer to capture output
+	var buf bytes.Buffer
+	bufOut := bufio.NewWriter(&buf)
+
+	var isExec bool
+	if p.cfg.Decrypt {
+		// For decryption, get executable bit from header
+		var err error
+		isExec, err = p.processDecryptStream(inFile, bufOut)
+		if err != nil {
+			return err
+		}
+	} else {
+		// For encryption, get executable bit from input file
+		isExec = info.Mode()&0o111 != 0
+		if err := p.processEncryptStream(inFile, bufOut, isExec); err != nil {
+			return err
+		}
+	}
+
+	if err := bufOut.Flush(); err != nil {
+		return fmt.Errorf("flushing buffer: %w", err)
+	}
+
+	// Set permissions based on operation type and executable bit
 	perm := os.FileMode(0o600)
-	if !p.cfg.Decrypt && info.Mode()&0o111 != 0 {
+	if isExec {
 		perm |= 0o111
 	}
 
-	outFile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY, perm)
-	if err != nil {
-		return fmt.Errorf("creating output file: %w", err)
+	// Write to output file with correct permissions
+	if err := os.WriteFile(outPath, buf.Bytes(), perm); err != nil {
+		return fmt.Errorf("writing output file: %w", err)
 	}
-	defer outFile.Close()
 
-	bufOut := bufio.NewWriter(outFile)
-	defer bufOut.Flush()
-
-	if p.cfg.Decrypt {
-		return p.processDecryptStream(inFile, bufOut)
-	}
-	return p.processEncryptStream(inFile, bufOut, info.Mode()&0o111 != 0)
+	return nil
 }
 
 func (p *Processor) processEncryptStream(r io.Reader, w *bufio.Writer, isExec bool) error {
-	// Write header with mode and executable bit
 	mode := ModeCBC
 	if p.cfg.Deterministic {
 		mode = ModeECB
@@ -186,7 +197,6 @@ func (p *Processor) processEncryptStream(r io.Reader, w *bufio.Writer, isExec bo
 
 		chunk := buf[:n+len(remainder)]
 		if err == io.EOF {
-			// Add padding on the last chunk
 			chunk = pkcs7Pad(chunk, aes.BlockSize)
 		}
 
@@ -210,11 +220,10 @@ func (p *Processor) processEncryptStream(r io.Reader, w *bufio.Writer, isExec bo
 	return nil
 }
 
-func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) error {
-	// Read header
+func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) (bool, error) {
 	header := make([]byte, 2)
 	if _, err := io.ReadFull(r, header); err != nil {
-		return fmt.Errorf("reading header: %w", err)
+		return false, fmt.Errorf("reading header: %w", err)
 	}
 
 	mode := CipherMode(header[0])
@@ -224,7 +233,7 @@ func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) error {
 	if mode == ModeCBC {
 		iv = make([]byte, aes.BlockSize)
 		if _, err := io.ReadFull(r, iv); err != nil {
-			return fmt.Errorf("reading IV: %w", err)
+			return false, fmt.Errorf("reading IV: %w", err)
 		}
 	}
 
@@ -243,12 +252,12 @@ func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) error {
 			break
 		}
 		if err != nil && err != io.EOF {
-			return fmt.Errorf("reading input: %w", err)
+			return false, fmt.Errorf("reading input: %w", err)
 		}
 
 		chunk := buf[:n]
 		if len(chunk)%aes.BlockSize != 0 {
-			return fmt.Errorf("invalid encrypted data length")
+			return false, fmt.Errorf("invalid encrypted data length")
 		}
 
 		if mode == ModeCBC {
@@ -257,11 +266,10 @@ func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) error {
 			p.decryptECBInPlace(chunk)
 		}
 
-		// If this is not the last chunk, write it immediately
 		if err != io.EOF {
 			if lastChunk != nil {
 				if _, err := w.Write(lastChunk); err != nil {
-					return fmt.Errorf("writing output: %w", err)
+					return false, fmt.Errorf("writing output: %w", err)
 				}
 			}
 			lastChunk = make([]byte, len(chunk))
@@ -269,25 +277,23 @@ func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) error {
 			continue
 		}
 
-		// For the last chunk, handle padding
 		if lastChunk != nil {
 			if _, err := w.Write(lastChunk); err != nil {
-				return fmt.Errorf("writing output: %w", err)
+				return false, fmt.Errorf("writing output: %w", err)
 			}
 		}
 
-		// Remove padding from the last chunk
 		unpadded, err := pkcs7Unpad(chunk)
 		if err != nil {
-			return fmt.Errorf("removing padding: %w", err)
+			return false, fmt.Errorf("removing padding: %w", err)
 		}
 
 		if _, err := w.Write(unpadded); err != nil {
-			return fmt.Errorf("writing final output: %w", err)
+			return false, fmt.Errorf("writing final output: %w", err)
 		}
 	}
 
-	return nil
+	return isExec, nil
 }
 
 func (p *Processor) encryptECBInPlace(data []byte) {
@@ -314,7 +320,6 @@ func (p *Processor) outputPath(filename string) string {
 		filepath.Base(filename)+ext)
 }
 
-// PKCS7 padding implementation
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
