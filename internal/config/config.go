@@ -9,7 +9,7 @@ import (
 
 type Config struct {
 	// Common flags
-	Key           string `validate:"required,len=64"` // hex encoded, so 32 bytes = 64 chars
+	Key           string
 	Parallel      int
 	EncryptSuffix string `mapstructure:"encrypt-ext"`
 	DecryptSuffix string `mapstructure:"decrypt-ext"`
@@ -17,6 +17,7 @@ type Config struct {
 	// Command-specific flags
 	Deterministic bool
 	Decrypt       bool
+	Length        int
 
 	// Positional arguments
 	Files []string `validate:"min=1"`

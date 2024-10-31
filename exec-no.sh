@@ -10,7 +10,7 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-KEY=$(gonc generate)
+KEY=$(gonc -d generate)
 
 # Create a test executable file
 cat > test2.sh << 'EOF'
@@ -29,7 +29,7 @@ fi
 # Encrypt the file
 # Assuming your binary is called 'gonc' and in PATH
 # Replace with actual path if needed
-gonc -k "${KEY}" encrypt test2.sh -d
+gonc -d -k "${KEY}" encrypt test2.sh
 
 # Verify encrypted file was created
 if [ ! -f "test2.sh.enc" ]; then

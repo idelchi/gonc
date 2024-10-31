@@ -53,13 +53,18 @@ Provides commands for key generation, encryption, and decryption.`,
 	return root
 }
 
-func NewGenerateCmd() *cobra.Command {
+func NewGenerateCmd(cfg *config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:     "generate",
 		Aliases: []string{"gen"},
 		Short:   "Generate a new encryption key",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key := make([]byte, 32)
+			length := 32
+			if cfg.Deterministic {
+				length = 64
+			}
+
+			key := make([]byte, length)
 			if _, err := rand.Read(key); err != nil {
 				return fmt.Errorf("generating key: %w", err)
 			}

@@ -35,7 +35,7 @@ func run() error {
 	root.Flags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
 	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers")
 
-	gen := commands.NewGenerateCmd()
+	gen := commands.NewGenerateCmd(cfg)
 	encrypt := commands.NewEncryptCmd(cfg)
 	decrypt := commands.NewDecryptCmd(cfg)
 
@@ -57,7 +57,7 @@ func run() error {
 		decrypt,
 	)
 
-	encrypt.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
+	root.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
 
 	root.CompletionOptions.HiddenDefaultCmd = true
 
