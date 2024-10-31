@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/go-playground/validator/v10 v10.22.1
-	github.com/idelchi/godyl v0.0.0-20241029091045-af98851a0cee
+	github.com/miscreant/miscreant.go v0.0.0-20200214223636-26d376326b75
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.19.0
 	golang.org/x/sync v0.8.0
@@ -23,7 +23,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
-	github.com/showa-93/go-mask v0.6.2 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
