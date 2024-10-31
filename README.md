@@ -25,8 +25,7 @@ gonc [flags] [paths...]
 Run `gonc` with the desired flags. The available flags include:
 
 ```sh
---include: Specify one or more include patterns (can be used multiple times)
---exclude: Specify one or more exclude patterns (can be used multiple times)
+
 ```
 
 Example:

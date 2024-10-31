@@ -16,12 +16,16 @@ func NewGenerateCmd() *cobra.Command {
 		Use:     "generate",
 		Aliases: []string{"gen"},
 		Short:   "Generate a new encryption key",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return viper.BindPFlags(cmd.Flags())
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := make([]byte, 32)
 			if _, err := rand.Read(key); err != nil {
 				return fmt.Errorf("generating key: %w", err)
 			}
 			fmt.Println(hex.EncodeToString(key))
+
 			return nil
 		},
 	}
@@ -33,10 +37,10 @@ func NewEncryptCmd() *cobra.Command {
 		Use:     "encrypt [flags] files...",
 		Aliases: []string{"enc"},
 		Short:   "Encrypt files",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return viper.BindPFlags(cmd.Flags())
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Add command-specific flag
-			cmd.Flags().Bool("deterministic", false, "Use deterministic encryption mode")
-
 			// Unmarshal all config (from env vars and flags) into struct
 			var cfg config.Config
 			if err := viper.Unmarshal(&cfg); err != nil {
@@ -60,6 +64,9 @@ func NewDecryptCmd() *cobra.Command {
 		Use:     "decrypt [flags] files...",
 		Aliases: []string{"dec"},
 		Short:   "Decrypt files",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return viper.BindPFlags(cmd.Flags())
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var cfg config.Config
 			if err := viper.Unmarshal(&cfg); err != nil {

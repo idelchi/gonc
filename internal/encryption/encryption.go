@@ -1,4 +1,3 @@
-// internal/encryption/encryption.go
 package encryption
 
 import (
@@ -11,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/idelchi/gonc/internal/config"
 	"golang.org/x/sync/errgroup"
@@ -23,8 +23,8 @@ const (
 	ModeECB
 )
 
-// Add a small header to identify the encryption mode
-func (p *Processor) encrypt(data []byte) ([]byte, error) {
+// Add a small header to identify the encryption mode and executable bit
+func (p *Processor) encrypt(data []byte, isExec bool) ([]byte, error) {
 	// Pad data to block size
 	padded := pkcs7Pad(data, aes.BlockSize)
 
@@ -51,23 +51,31 @@ func (p *Processor) encrypt(data []byte) ([]byte, error) {
 		ciphertext = append(iv, ciphertext...)
 	}
 
-	// Prepend mode identifier
-	return append([]byte{byte(mode)}, ciphertext...), nil
-}
-
-func (p *Processor) decrypt(data []byte) ([]byte, error) {
-	if len(data) < 1 {
-		return nil, fmt.Errorf("data too short")
+	// Prepend mode identifier and executable bit
+	header := []byte{byte(mode)}
+	if isExec {
+		header = append(header, 1)
+	} else {
+		header = append(header, 0)
 	}
 
-	// Extract mode
+	return append(header, ciphertext...), nil
+}
+
+func (p *Processor) decrypt(data []byte) ([]byte, bool, error) {
+	if len(data) < 2 {
+		return nil, false, fmt.Errorf("data too short")
+	}
+
+	// Extract mode and executable bit
 	mode := CipherMode(data[0])
-	data = data[1:]
+	isExec := data[1] == 1
+	data = data[2:]
 
 	switch mode {
 	case ModeCBC:
 		if len(data) < aes.BlockSize {
-			return nil, fmt.Errorf("data too short for CBC mode")
+			return nil, false, fmt.Errorf("data too short for CBC mode")
 		}
 		iv := data[:aes.BlockSize]
 		ciphertext := data[aes.BlockSize:]
@@ -75,14 +83,16 @@ func (p *Processor) decrypt(data []byte) ([]byte, error) {
 		cbcMode := cipher.NewCBCDecrypter(p.cipher, iv)
 		plaintext := make([]byte, len(ciphertext))
 		cbcMode.CryptBlocks(plaintext, ciphertext)
-		return pkcs7Unpad(plaintext)
+		unpadded, err := pkcs7Unpad(plaintext)
+		return unpadded, isExec, err
 
 	case ModeECB:
 		plaintext := p.decryptECB(data)
-		return pkcs7Unpad(plaintext)
+		unpadded, err := pkcs7Unpad(plaintext)
+		return unpadded, isExec, err
 
 	default:
-		return nil, fmt.Errorf("unknown encryption mode: %d", mode)
+		return nil, false, fmt.Errorf("unknown encryption mode: %d", mode)
 	}
 }
 
@@ -155,22 +165,40 @@ func (p *Processor) ProcessFiles() error {
 }
 
 func (p *Processor) processFile(filename, outPath string) error {
+	info, err := os.Stat(filename)
+	if err != nil {
+		return fmt.Errorf("getting file info: %w", err)
+	}
+
+	// Check if file is executable (any execute bit is set)
+	isExec := info.Mode()&0o111 != 0
+
 	input, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
 	}
 
 	var output []byte
-	if p.cfg.Decrypt {
-		output, err = p.decrypt(input)
-	} else {
-		output, err = p.encrypt(input)
-	}
-	if err != nil {
-		return err
-	}
+	var execOut bool
 
-	return os.WriteFile(outPath, output, 0o600)
+	if p.cfg.Decrypt {
+		output, execOut, err = p.decrypt(input)
+		if err != nil {
+			return err
+		}
+		// Set output permissions based on executable bit
+		perm := os.FileMode(0o600)
+		if execOut {
+			perm |= 0o111
+		}
+		return os.WriteFile(outPath, output, perm)
+	} else {
+		output, err = p.encrypt(input, isExec)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(outPath, output, 0o600)
+	}
 }
 
 func (p *Processor) encryptECB(data []byte) []byte {
@@ -194,9 +222,11 @@ func (p *Processor) decryptECB(data []byte) []byte {
 }
 
 func (p *Processor) outputPath(filename string) string {
-	ext := ".enc"
+	ext := p.cfg.EncryptSuffix
 	if p.cfg.Decrypt {
-		ext = ".dec"
+		// Strip suffix
+		filename = strings.TrimSuffix(filename, p.cfg.EncryptSuffix)
+		ext = p.cfg.DecryptSuffix
 	}
 	return filepath.Join(filepath.Dir(filename),
 		filepath.Base(filename)+ext)

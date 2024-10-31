@@ -21,7 +21,7 @@ func main() {
 
 func run() error {
 	// Configure viper first
-	viper.SetEnvPrefix("GONC")
+	viper.SetEnvPrefix("gonc")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
@@ -36,14 +36,30 @@ Provides commands for key generation, encryption, and decryption.`,
 
 	// Add persistent flags - they'll be automatically bound by viper
 	root.PersistentFlags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
-	root.PersistentFlags().IntP("parallel", "j", 100, "Number of parallel workers")
+	root.PersistentFlags().IntP("parallel", "j", 20, "Number of parallel workers")
+	root.PersistentFlags().String("encrypt-suffix", ".enc", "Suffix to append to encrypted files")
+	root.PersistentFlags().String("decrypt-suffix", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
+
+	gen := commands.NewGenerateCmd()
+	encrypt := commands.NewEncryptCmd()
+	decrypt := commands.NewDecryptCmd()
+
+	gen.SetHelpFunc(func(command *cobra.Command, strings []string) {
+		// Hide flag for this command
+		command.Flags().MarkHidden("key")
+		command.Flags().MarkHidden("parallel")
+		// Call parent help func
+		command.Parent().HelpFunc()(command, strings)
+	})
 
 	// Add commands
 	root.AddCommand(
-		commands.NewGenerateCmd(),
-		commands.NewEncryptCmd(),
-		commands.NewDecryptCmd(),
+		gen,
+		encrypt,
+		decrypt,
 	)
+
+	encrypt.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
 
 	root.CompletionOptions.HiddenDefaultCmd = true
 
