@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
@@ -11,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/idelchi/gonc/internal/config"
 	"golang.org/x/sync/errgroup"
@@ -23,89 +25,22 @@ const (
 	ModeECB
 )
 
-// Add a small header to identify the encryption mode and executable bit
-func (p *Processor) encrypt(data []byte, isExec bool) ([]byte, error) {
-	// Pad data to block size
-	padded := pkcs7Pad(data, aes.BlockSize)
+const (
+	chunkSize    = 1 * 1024 * 1024 // 1MB chunks
+	resultBuffer = 1000            // Buffer size for result channel
+)
 
-	var (
-		ciphertext []byte
-		mode       CipherMode
-	)
-
-	if p.cfg.Deterministic {
-		mode = ModeECB
-		ciphertext = p.encryptECB(padded)
-	} else {
-		mode = ModeCBC
-		iv := make([]byte, aes.BlockSize)
-		if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-			return nil, fmt.Errorf("generating IV: %w", err)
-		}
-
-		cbcMode := cipher.NewCBCEncrypter(p.cipher, iv)
-		ciphertext = make([]byte, len(padded))
-		cbcMode.CryptBlocks(ciphertext, padded)
-
-		// For CBC, prepend IV to ciphertext
-		ciphertext = append(iv, ciphertext...)
-	}
-
-	// Prepend mode identifier and executable bit
-	header := []byte{byte(mode)}
-	if isExec {
-		header = append(header, 1)
-	} else {
-		header = append(header, 0)
-	}
-
-	return append(header, ciphertext...), nil
-}
-
-func (p *Processor) decrypt(data []byte) ([]byte, bool, error) {
-	if len(data) < 2 {
-		return nil, false, fmt.Errorf("data too short")
-	}
-
-	// Extract mode and executable bit
-	mode := CipherMode(data[0])
-	isExec := data[1] == 1
-	data = data[2:]
-
-	switch mode {
-	case ModeCBC:
-		if len(data) < aes.BlockSize {
-			return nil, false, fmt.Errorf("data too short for CBC mode")
-		}
-		iv := data[:aes.BlockSize]
-		ciphertext := data[aes.BlockSize:]
-
-		cbcMode := cipher.NewCBCDecrypter(p.cipher, iv)
-		plaintext := make([]byte, len(ciphertext))
-		cbcMode.CryptBlocks(plaintext, ciphertext)
-		unpadded, err := pkcs7Unpad(plaintext)
-		return unpadded, isExec, err
-
-	case ModeECB:
-		plaintext := p.decryptECB(data)
-		unpadded, err := pkcs7Unpad(plaintext)
-		return unpadded, isExec, err
-
-	default:
-		return nil, false, fmt.Errorf("unknown encryption mode: %d", mode)
-	}
+type Processor struct {
+	cfg     config.Config
+	cipher  cipher.Block
+	results chan Result
+	pool    sync.Pool
 }
 
 type Result struct {
 	Input  string
 	Output string
 	Error  error
-}
-
-type Processor struct {
-	cfg     config.Config
-	cipher  cipher.Block
-	results chan Result
 }
 
 func NewProcessor(cfg config.Config) (*Processor, error) {
@@ -122,7 +57,12 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	return &Processor{
 		cfg:     cfg,
 		cipher:  block,
-		results: make(chan Result, len(cfg.Files)),
+		results: make(chan Result, resultBuffer),
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, chunkSize+aes.BlockSize)
+			},
+		},
 	}, nil
 }
 
@@ -130,7 +70,6 @@ func (p *Processor) ProcessFiles() error {
 	g := new(errgroup.Group)
 	g.SetLimit(p.cfg.Parallel)
 
-	// Start result printer
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -143,12 +82,11 @@ func (p *Processor) ProcessFiles() error {
 		}
 	}()
 
-	// Process files
 	for _, file := range p.cfg.Files {
-		file := file // Capture for closure
+		file := file
 		g.Go(func() error {
 			outPath := p.outputPath(file)
-			if err := p.processFile(file, outPath); err != nil {
+			if err := p.processFileStreaming(file, outPath); err != nil {
 				p.results <- Result{Input: file, Error: err}
 				return err
 			}
@@ -157,74 +95,225 @@ func (p *Processor) ProcessFiles() error {
 		})
 	}
 
-	// Wait for all processing to complete
 	err := g.Wait()
 	close(p.results)
-	<-done // Wait for printer to finish
+	<-done
 	return err
 }
+// Only showing the relevant modified functions for clarity
+func (p *Processor) processFileStreaming(inPath, outPath string) error {
+    info, err := os.Stat(inPath)
+    if err != nil {
+        return fmt.Errorf("getting file info: %w", err)
+    }
 
-func (p *Processor) processFile(filename, outPath string) error {
-	info, err := os.Stat(filename)
-	if err != nil {
-		return fmt.Errorf("getting file info: %w", err)
+    inFile, err := os.Open(inPath)
+    if err != nil {
+        return fmt.Errorf("opening input file: %w", err)
+    }
+    defer inFile.Close()
+
+    // Create temporary writer to capture output
+    var buf bytes.Buffer
+    bufOut := bufio.NewWriter(&buf)
+
+    var isExec bool
+    if p.cfg.Decrypt {
+        // For decryption, get executable bit from header
+        var err error
+        isExec, err = p.processDecryptStream(inFile, bufOut)
+        if err != nil {
+            return err
+        }
+    } else {
+        // For encryption, get executable bit from input file
+        isExec = info.Mode()&0o111 != 0
+        if err := p.processEncryptStream(inFile, bufOut, isExec); err != nil {
+            return err
+        }
+    }
+
+    if err := bufOut.Flush(); err != nil {
+        return fmt.Errorf("flushing buffer: %w", err)
+    }
+
+    // Set permissions based on operation type and executable bit
+    var perm os.FileMode
+    if isExec {
+        perm = 0o755 // rwxr-xr-x for executable files
+    } else {
+        perm = 0o644 // rw-r--r-- for non-executable files
+    }
+
+    // Write to output file with correct permissions
+    if err := os.WriteFile(outPath, buf.Bytes(), perm); err != nil {
+        return fmt.Errorf("writing output file: %w", err)
+    }
+
+    return nil
+}
+func (p *Processor) processEncryptStream(r io.Reader, w *bufio.Writer, isExec bool) error {
+	mode := ModeCBC
+	if p.cfg.Deterministic {
+		mode = ModeECB
 	}
-
-	// Check if file is executable (any execute bit is set)
-	isExec := info.Mode()&0o111 != 0
-
-	input, err := os.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("reading file: %w", err)
-	}
-
-	var output []byte
-	var execOut bool
-
-	if p.cfg.Decrypt {
-		output, execOut, err = p.decrypt(input)
-		if err != nil {
-			return err
-		}
-		// Set output permissions based on executable bit
-		perm := os.FileMode(0o600)
-		if execOut {
-			perm |= 0o111
-		}
-		return os.WriteFile(outPath, output, perm)
+	header := []byte{byte(mode)}
+	if isExec {
+		header = append(header, 1)
 	} else {
-		output, err = p.encrypt(input, isExec)
-		if err != nil {
-			return err
+		header = append(header, 0)
+	}
+	if _, err := w.Write(header); err != nil {
+		return fmt.Errorf("writing header: %w", err)
+	}
+
+	var iv []byte
+	if mode == ModeCBC {
+		iv = make([]byte, aes.BlockSize)
+		if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+			return fmt.Errorf("generating IV: %w", err)
 		}
-		return os.WriteFile(outPath, output, 0o600)
+		if _, err := w.Write(iv); err != nil {
+			return fmt.Errorf("writing IV: %w", err)
+		}
+	}
+
+	buf := p.pool.Get().([]byte)
+	defer p.pool.Put(buf)
+
+	var encrypter cipher.BlockMode
+	if mode == ModeCBC {
+		encrypter = cipher.NewCBCEncrypter(p.cipher, iv)
+	}
+
+	var remainder []byte
+	for {
+		n, err := r.Read(buf[len(remainder):chunkSize])
+		if n == 0 && err == io.EOF {
+			break
+		}
+		if err != nil && err != io.EOF {
+			return fmt.Errorf("reading input: %w", err)
+		}
+
+		chunk := buf[:n+len(remainder)]
+		if err == io.EOF {
+			chunk = pkcs7Pad(chunk, aes.BlockSize)
+		}
+
+		if len(chunk)%aes.BlockSize != 0 {
+			remainder = chunk
+			continue
+		}
+
+		if mode == ModeCBC {
+			encrypter.CryptBlocks(chunk, chunk)
+		} else {
+			p.encryptECBInPlace(chunk)
+		}
+
+		if _, err := w.Write(chunk); err != nil {
+			return fmt.Errorf("writing output: %w", err)
+		}
+		remainder = nil
+	}
+
+	return nil
+}
+
+func (p *Processor) processDecryptStream(r io.Reader, w *bufio.Writer) (bool, error) {
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return false, fmt.Errorf("reading header: %w", err)
+	}
+
+	mode := CipherMode(header[0])
+	isExec := header[1] == 1
+
+	var iv []byte
+	if mode == ModeCBC {
+		iv = make([]byte, aes.BlockSize)
+		if _, err := io.ReadFull(r, iv); err != nil {
+			return false, fmt.Errorf("reading IV: %w", err)
+		}
+	}
+
+	buf := p.pool.Get().([]byte)
+	defer p.pool.Put(buf)
+
+	var decrypter cipher.BlockMode
+	if mode == ModeCBC {
+		decrypter = cipher.NewCBCDecrypter(p.cipher, iv)
+	}
+
+	var lastChunk []byte
+	for {
+		n, err := r.Read(buf[:chunkSize])
+		if n == 0 && err == io.EOF {
+			break
+		}
+		if err != nil && err != io.EOF {
+			return false, fmt.Errorf("reading input: %w", err)
+		}
+
+		chunk := buf[:n]
+		if len(chunk)%aes.BlockSize != 0 {
+			return false, fmt.Errorf("invalid encrypted data length")
+		}
+
+		if mode == ModeCBC {
+			decrypter.CryptBlocks(chunk, chunk)
+		} else {
+			p.decryptECBInPlace(chunk)
+		}
+
+		if err != io.EOF {
+			if lastChunk != nil {
+				if _, err := w.Write(lastChunk); err != nil {
+					return false, fmt.Errorf("writing output: %w", err)
+				}
+			}
+			lastChunk = make([]byte, len(chunk))
+			copy(lastChunk, chunk)
+			continue
+		}
+
+		if lastChunk != nil {
+			if _, err := w.Write(lastChunk); err != nil {
+				return false, fmt.Errorf("writing output: %w", err)
+			}
+		}
+
+		unpadded, err := pkcs7Unpad(chunk)
+		if err != nil {
+			return false, fmt.Errorf("removing padding: %w", err)
+		}
+
+		if _, err := w.Write(unpadded); err != nil {
+			return false, fmt.Errorf("writing final output: %w", err)
+		}
+	}
+
+	return isExec, nil
+}
+
+func (p *Processor) encryptECBInPlace(data []byte) {
+	size := p.cipher.BlockSize()
+	for i := 0; i < len(data); i += size {
+		p.cipher.Encrypt(data[i:i+size], data[i:i+size])
 	}
 }
 
-func (p *Processor) encryptECB(data []byte) []byte {
-	ciphertext := make([]byte, len(data))
+func (p *Processor) decryptECBInPlace(data []byte) {
 	size := p.cipher.BlockSize()
-
 	for i := 0; i < len(data); i += size {
-		p.cipher.Encrypt(ciphertext[i:i+size], data[i:i+size])
+		p.cipher.Decrypt(data[i:i+size], data[i:i+size])
 	}
-	return ciphertext
-}
-
-func (p *Processor) decryptECB(data []byte) []byte {
-	plaintext := make([]byte, len(data))
-	size := p.cipher.BlockSize()
-
-	for i := 0; i < len(data); i += size {
-		p.cipher.Decrypt(plaintext[i:i+size], data[i:i+size])
-	}
-	return plaintext
 }
 
 func (p *Processor) outputPath(filename string) string {
 	ext := p.cfg.EncryptSuffix
 	if p.cfg.Decrypt {
-		// Strip suffix
 		filename = strings.TrimSuffix(filename, p.cfg.EncryptSuffix)
 		ext = p.cfg.DecryptSuffix
 	}
@@ -232,7 +321,6 @@ func (p *Processor) outputPath(filename string) string {
 		filepath.Base(filename)+ext)
 }
 
-// PKCS7 padding implementation
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
@@ -250,7 +338,6 @@ func pkcs7Unpad(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid padding")
 	}
 
-	// Verify padding
 	for i := length - padding; i < length; i++ {
 		if data[i] != byte(padding) {
 			return nil, fmt.Errorf("invalid padding")
