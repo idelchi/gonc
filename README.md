@@ -53,10 +53,10 @@ Example:
 gonc generate
 
 # Encrypt files with the generated key
-gonc encrypt -k <your-key> file1.txt file2.txt
+gonc -k <key> encrypt file1.txt file2.txt
 
 # Decrypt files
-gonc decrypt -k <your-key> file1.txt.enc file2.txt.enc
+gonc -k <key> decrypt file1.txt.enc file2.txt.enc
 ```
 
 For more details on usage and configuration, run:
