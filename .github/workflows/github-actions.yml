@@ -14,6 +14,13 @@ jobs:
   info:
     uses: idelchi/devenv/.github/workflows/info.yml@dev
 
+  cleanup:
+    uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: info
+    permissions:
+      actions: write
+
   next-tag:
     uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
     if: github.ref == 'refs/heads/dev'
@@ -35,10 +42,3 @@ jobs:
     needs: info
     permissions:
       contents: write
-
-  cleanup:
-    uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
-    if: github.ref == 'refs/heads/dev' && always()
-    needs: release
-    permissions:
-      actions: write

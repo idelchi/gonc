@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/idelchi/gonc/internal/commands"
-	"github.com/spf13/cobra"
+	"github.com/idelchi/gonc/internal/config"
 	"github.com/spf13/viper"
 )
 
@@ -25,32 +26,22 @@ func run() error {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	root := &cobra.Command{
-		Use:   "gonc",
-		Short: "File encryption utility",
-		Long: `A file encryption utility that supports deterministic and non-deterministic modes.
-Provides commands for key generation, encryption, and decryption.`,
-	}
+	cfg := &config.Config{}
 
-	root.CompletionOptions.DisableDefaultCmd = true
+	root := commands.NewRootCmd(cfg)
+	root.Version = version
 
 	// Add persistent flags - they'll be automatically bound by viper
-	root.PersistentFlags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
-	root.PersistentFlags().IntP("parallel", "j", 20, "Number of parallel workers")
-	root.PersistentFlags().String("encrypt-suffix", ".enc", "Suffix to append to encrypted files")
-	root.PersistentFlags().String("decrypt-suffix", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
+	root.Flags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
+	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers")
 
 	gen := commands.NewGenerateCmd()
-	encrypt := commands.NewEncryptCmd()
-	decrypt := commands.NewDecryptCmd()
+	encrypt := commands.NewEncryptCmd(cfg)
+	decrypt := commands.NewDecryptCmd(cfg)
 
-	gen.SetHelpFunc(func(command *cobra.Command, strings []string) {
-		// Hide flag for this command
-		command.Flags().MarkHidden("key")
-		command.Flags().MarkHidden("parallel")
-		// Call parent help func
-		command.Parent().HelpFunc()(command, strings)
-	})
+	root.Flags().String("encrypt-ext", ".enc", "Suffix to append to encrypted files")
+	root.Flags().String("decrypt-ext", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
+
 
 	// Add commands
 	root.AddCommand(

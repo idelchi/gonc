@@ -11,8 +11,8 @@ type Config struct {
 	// Common flags
 	Key           string `validate:"required,len=64"` // hex encoded, so 32 bytes = 64 chars
 	Parallel      int
-	EncryptSuffix string `mapstructure:"encrypt-suffix"`
-	DecryptSuffix string `mapstructure:"decrypt-suffix"`
+	EncryptSuffix string `mapstructure:"encrypt-ext"`
+	DecryptSuffix string `mapstructure:"decrypt-ext"`
 
 	// Command-specific flags
 	Deterministic bool
