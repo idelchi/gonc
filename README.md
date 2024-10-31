@@ -40,10 +40,10 @@ The utility supports the following commands:
 
 ```sh
 Available Commands:
-  decrypt|dec       Decrypt files
-  encrypt|enc       Encrypt files
-  generate|gen      Generate a new encryption key
-  help              Help about any command
+  decrypt       Decrypt files (aliases: dec)
+  encrypt       Encrypt files (aliases: enc)
+  generate      Generate a new encryption key (aliases: gen)
+  help          Help about any command
 ```
 
 Example:
