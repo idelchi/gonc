@@ -346,7 +346,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	if cfg.Deterministic {
 		// Ensure key length is 64 bytes for AES-SIV
 		if len(keyBytes) != 64 {
-			return nil, fmt.Errorf("key must be 64 bytes (128 hex characters) for AES-SIV")
+			return nil, fmt.Errorf("NewProcessor: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
 		// Initialize Deterministic AEAD
@@ -362,7 +362,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	} else {
 		// Ensure key length is 32 bytes for AES-256
 		if len(keyBytes) != 32 {
-			return nil, fmt.Errorf("key must be 32 bytes (64 hex characters) for AES-256")
+			return nil, fmt.Errorf("NewProcessor: key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
 		// Initialize AES cipher block for CBC mode
@@ -521,7 +521,7 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	case ModeDeterministic:
 		// Ensure key length is 64 bytes for AES-SIV
 		if len(p.key) != 64 {
-			return false, fmt.Errorf("key must be 64 bytes (128 hex characters) for AES-SIV")
+			return false, fmt.Errorf("decrypt: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
 		// Initialize Deterministic AEAD
@@ -539,7 +539,7 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	case ModeCBC:
 		// Ensure key length is 32 bytes for AES-256
 		if len(p.key) != 32 {
-			return false, fmt.Errorf("key must be 32 bytes (64 hex characters) for AES-256")
+			return false, fmt.Errorf("decrypt: key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
 		// Initialize AES cipher block for CBC mode
