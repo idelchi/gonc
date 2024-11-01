@@ -28,21 +28,22 @@ Run `gonc` with the desired flags. The available flags include:
 
 ```sh
 Flags:
-      --decrypt-ext string   Suffix to append to decrypted files. If empty, the suffix will be removed
-      --encrypt-ext string   Suffix to append to encrypted files (default ".enc")
-  -h, --help                 help for gonc
-  -k, --key string          Encryption key (32 bytes, hex-encoded)
-  -j, --parallel int        Number of parallel workers (defaults to the number of CPUs)
-  -v, --version             version for gonc
+  -k, --key string            Encryption key (32 bytes, hex-encoded)
+  -j, --parallel int          Number of parallel workers (defaults to the number of CPUs)
+      --decrypt-ext string    Suffix to append to decrypted files, after stripping the encrypted suffix (default "")
+      --encrypt-ext string    Suffix to append to encrypted files (default ".enc")
+  -d, --deterministic         Use deterministic encryption mode. Valid for "generate" and "encrypt" commands
+  -h, --help                  help for gonc
+  -v, --version               version for gonc
 ```
 
 The utility supports the following commands:
 
 ```sh
 Available Commands:
-  decrypt       Decrypt files (aliases: dec)
-  encrypt       Encrypt files (aliases: enc)
   generate      Generate a new encryption key (aliases: gen)
+  encrypt       Encrypt files (aliases: enc)
+  decrypt       Decrypt files (aliases: dec)
   help          Help about any command
 ```
 
