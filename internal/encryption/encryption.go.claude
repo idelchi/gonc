@@ -561,8 +561,6 @@ func (p *Processor) processFile(filename, outPath string) error {
 		return fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
-	fmt.Printf("Processing %s\n", filename)
-
 	isExec := info.Mode()&0o111 != 0
 
 	// Create temporary output file

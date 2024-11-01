@@ -1,13 +1,15 @@
 // Package encryption provides functionality for file encryption and decryption using AES
 // in either CBC mode or deterministic encryption using Google Tink. It supports concurrent
-// processing of multiple files with configurable parallelism.
+// processing of multiple files with configurable parallelism and streaming I/O.
 package encryption
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -28,9 +30,262 @@ import (
 )
 
 const (
-	// defaultBufferSize defines the size of the buffer used for file I/O operations.
-	defaultBufferSize = 32 * 1024 // 32KB default buffer size
+	defaultBufferSize = 32 * 1024   // 32KB default buffer size
+	chunkSize         = 1024 * 1024 // 1MB chunk size for deterministic encryption
 )
+
+// streamingWriter wraps an io.Writer with deterministic encryption capabilities
+type streamingWriter struct {
+	w              io.Writer
+	daead          tink.DeterministicAEAD
+	buffer         []byte
+	associatedData []byte
+}
+
+func newStreamingWriter(w io.Writer, daead tink.DeterministicAEAD, associatedData []byte) *streamingWriter {
+	return &streamingWriter{
+		w:              w,
+		daead:          daead,
+		buffer:         make([]byte, 0, chunkSize),
+		associatedData: associatedData,
+	}
+}
+
+func (sw *streamingWriter) Write(p []byte) (int, error) {
+	sw.buffer = append(sw.buffer, p...)
+
+	// Process complete chunks
+	for len(sw.buffer) >= chunkSize {
+		if err := sw.flushChunk(chunkSize); err != nil {
+			return 0, err
+		}
+	}
+
+	return len(p), nil
+}
+
+func (sw *streamingWriter) Close() error {
+	// Flush any remaining data
+	if len(sw.buffer) > 0 {
+		return sw.flushChunk(len(sw.buffer))
+	}
+	return nil
+}
+
+func (sw *streamingWriter) flushChunk(size int) error {
+	chunk := sw.buffer[:size]
+	encrypted, err := sw.daead.EncryptDeterministically(chunk, sw.associatedData)
+	if err != nil {
+		return fmt.Errorf("encrypting chunk: %w", err)
+	}
+
+	// Write chunk size and encrypted data
+	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil {
+		return fmt.Errorf("writing chunk size: %w", err)
+	}
+	if _, err := sw.w.Write(encrypted); err != nil {
+		return fmt.Errorf("writing encrypted chunk: %w", err)
+	}
+
+	sw.buffer = sw.buffer[size:]
+	return nil
+}
+
+// The rest of the imports and type definitions remain the same...
+
+func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
+	sw := newStreamingWriter(w, p.daead, nil)
+	defer sw.Close()
+
+	buf := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buf)
+
+	// Stream data through the encrypting writer
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			if _, err := sw.Write(buf[:n]); err != nil {
+				return fmt.Errorf("writing to stream: %w", err)
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("reading input: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
+	br := bufio.NewReader(r)
+
+	for {
+		// Read chunk size
+		var chunkSize uint32
+		if err := binary.Read(br, binary.BigEndian, &chunkSize); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("reading chunk size: %w", err)
+		}
+
+		// Read encrypted chunk
+		encrypted := make([]byte, chunkSize)
+		if _, err := io.ReadFull(br, encrypted); err != nil {
+			return fmt.Errorf("reading encrypted chunk: %w", err)
+		}
+
+		// Decrypt chunk
+		decrypted, err := p.daead.DecryptDeterministically(encrypted, nil)
+		if err != nil {
+			return fmt.Errorf("decrypting chunk: %w", err)
+		}
+
+		// Write decrypted chunk
+		if _, err := w.Write(decrypted); err != nil {
+			return fmt.Errorf("writing decrypted chunk: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
+	// Generate and write IV
+	iv := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return fmt.Errorf("generating IV: %w", err)
+	}
+	if _, err := w.Write(iv); err != nil {
+		return fmt.Errorf("writing IV: %w", err)
+	}
+
+	cbcMode := cipher.NewCBCEncrypter(p.cipher, iv)
+	bufReader := bufio.NewReaderSize(r, defaultBufferSize)
+
+	buf := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buf)
+
+	blockBuf := make([]byte, 0, 2*aes.BlockSize)
+	isEOF := false
+
+	// Process the file in chunks
+	for !isEOF {
+		// Read more data if needed
+		n, err := bufReader.Read(buf)
+		if n > 0 {
+			blockBuf = append(blockBuf, buf[:n]...)
+		}
+		if err == io.EOF {
+			isEOF = true
+		} else if err != nil {
+			return fmt.Errorf("reading input: %w", err)
+		}
+
+		// Process complete blocks, keeping last block for padding if needed
+		for len(blockBuf) >= aes.BlockSize {
+			// If this is the last data and last block, break to handle padding
+			if isEOF && len(blockBuf) == aes.BlockSize {
+				break
+			}
+
+			ciphertext := make([]byte, aes.BlockSize)
+			cbcMode.CryptBlocks(ciphertext, blockBuf[:aes.BlockSize])
+
+			if _, err := w.Write(ciphertext); err != nil {
+				return fmt.Errorf("writing encrypted block: %w", err)
+			}
+
+			blockBuf = blockBuf[aes.BlockSize:]
+		}
+
+		// Handle final block with padding if we've reached EOF
+		if isEOF {
+			// Apply padding
+			padded := pkcs7Pad(blockBuf, aes.BlockSize)
+			ciphertext := make([]byte, len(padded))
+			cbcMode.CryptBlocks(ciphertext, padded)
+
+			if _, err := w.Write(ciphertext); err != nil {
+				return fmt.Errorf("writing final encrypted block: %w", err)
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
+	// Read IV
+	iv := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(r, iv); err != nil {
+		return fmt.Errorf("reading IV: %w", err)
+	}
+
+	cbcMode := cipher.NewCBCDecrypter(p.cipher, iv)
+	bufReader := bufio.NewReaderSize(r, defaultBufferSize)
+
+	buf := bufferPool.Get().([]byte)
+	defer bufferPool.Put(buf)
+
+	var lastBlock []byte
+	blockBuf := make([]byte, 0, 2*aes.BlockSize)
+	isEOF := false
+
+	// Process the file in chunks
+	for !isEOF {
+		// Read more data if needed
+		n, err := bufReader.Read(buf)
+		if n > 0 {
+			blockBuf = append(blockBuf, buf[:n]...)
+		}
+		if err == io.EOF {
+			isEOF = true
+		} else if err != nil {
+			return fmt.Errorf("reading input: %w", err)
+		}
+
+		// Ensure we have complete blocks
+		if len(blockBuf)%aes.BlockSize != 0 && isEOF {
+			return fmt.Errorf("ciphertext is not a multiple of block size")
+		}
+
+		// Process complete blocks except the last block
+		for len(blockBuf) >= 2*aes.BlockSize {
+			plaintext := make([]byte, aes.BlockSize)
+			cbcMode.CryptBlocks(plaintext, blockBuf[:aes.BlockSize])
+
+			if _, err := w.Write(plaintext); err != nil {
+				return fmt.Errorf("writing decrypted block: %w", err)
+			}
+
+			blockBuf = blockBuf[aes.BlockSize:]
+		}
+
+		// If this is the last block and we have a complete block, process it
+		if isEOF && len(blockBuf) == aes.BlockSize {
+			lastBlock = make([]byte, aes.BlockSize)
+			cbcMode.CryptBlocks(lastBlock, blockBuf)
+
+			// Remove padding from the last block
+			unpadded, err := pkcs7Unpad(lastBlock)
+			if err != nil {
+				return fmt.Errorf("removing padding: %w", err)
+			}
+
+			if _, err := w.Write(unpadded); err != nil {
+				return fmt.Errorf("writing final decrypted block: %w", err)
+			}
+			break
+		}
+	}
+
+	return nil
+}
 
 // bufferPool provides a pool of reusable byte slices for file I/O operations.
 var bufferPool = sync.Pool{
@@ -246,70 +501,6 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 	return err
 }
 
-// encryptDeterministic encrypts data using Tink's Deterministic AEAD.
-func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return fmt.Errorf("reading input data: %w", err)
-	}
-
-	// Encrypt data deterministically
-	ciphertext, err := p.daead.EncryptDeterministically(data, nil)
-	if err != nil {
-		return fmt.Errorf("encrypting data: %w", err)
-	}
-
-	// Write ciphertext
-	if _, err := w.Write(ciphertext); err != nil {
-		return fmt.Errorf("writing encrypted data: %w", err)
-	}
-
-	return nil
-}
-
-// encryptCBC encrypts data using CBC mode with PKCS#7 padding.
-func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return fmt.Errorf("generating IV: %w", err)
-	}
-
-	if _, err := w.Write(iv); err != nil {
-		return fmt.Errorf("writing IV: %w", err)
-	}
-
-	cbcMode := cipher.NewCBCEncrypter(p.cipher, iv)
-
-	buf := bufferPool.Get().([]byte)
-	defer bufferPool.Put(buf)
-
-	var plaintext []byte
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			plaintext = append(plaintext, buf[:n]...)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("reading input: %w", err)
-		}
-	}
-
-	// Pad data to block size
-	padded := pkcs7Pad(plaintext, aes.BlockSize)
-
-	ciphertext := make([]byte, len(padded))
-	cbcMode.CryptBlocks(ciphertext, padded)
-
-	if _, err := w.Write(ciphertext); err != nil {
-		return fmt.Errorf("writing encrypted data: %w", err)
-	}
-
-	return nil
-}
-
 // decrypt reads encrypted data from r, decrypts it using the mode specified in the header,
 // and writes the result to w. It returns whether the original file was executable.
 func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
@@ -320,6 +511,8 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 
 	mode := CipherMode(header[0])
 	isExec := header[1] == 1
+
+	fmt.Printf("Mode is %d\n", mode)
 
 	// Initialize cipher or AEAD based on mode
 	var err error
@@ -360,73 +553,6 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	}
 
 	return isExec, err
-}
-
-// decryptDeterministic decrypts data encrypted with Tink's Deterministic AEAD.
-func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
-	ciphertext, err := io.ReadAll(r)
-	if err != nil {
-		return fmt.Errorf("reading encrypted data: %w", err)
-	}
-
-	// Decrypt data deterministically
-	plaintext, err := p.daead.DecryptDeterministically(ciphertext, nil)
-	if err != nil {
-		return fmt.Errorf("decrypting data: %w", err)
-	}
-
-	// Write plaintext
-	if _, err := w.Write(plaintext); err != nil {
-		return fmt.Errorf("writing decrypted data: %w", err)
-	}
-
-	return nil
-}
-
-// decryptCBC decrypts data that was encrypted using CBC mode.
-func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(r, iv); err != nil {
-		return fmt.Errorf("reading IV: %w", err)
-	}
-
-	cbcMode := cipher.NewCBCDecrypter(p.cipher, iv)
-
-	buf := bufferPool.Get().([]byte)
-	defer bufferPool.Put(buf)
-
-	var ciphertext []byte
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			ciphertext = append(ciphertext, buf[:n]...)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("reading encrypted data: %w", err)
-		}
-	}
-
-	if len(ciphertext)%aes.BlockSize != 0 {
-		return fmt.Errorf("ciphertext is not a multiple of the block size")
-	}
-
-	plaintext := make([]byte, len(ciphertext))
-	cbcMode.CryptBlocks(plaintext, ciphertext)
-
-	// Remove PKCS#7 padding
-	unpadded, err := pkcs7Unpad(plaintext)
-	if err != nil {
-		return err
-	}
-
-	if _, err := w.Write(unpadded); err != nil {
-		return fmt.Errorf("writing decrypted data: %w", err)
-	}
-
-	return nil
 }
 
 // processFile handles the encryption or decryption of a single file.
