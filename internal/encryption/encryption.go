@@ -451,7 +451,6 @@ func (p *Processor) ProcessFiles() error {
 		file := file // Capture for closure
 		g.Go(func() error {
 			outPath := p.outputPath(file)
-			fmt.Printf("Processing %q -> %q\n", file, outPath)
 			if err := p.processFile(file, outPath); err != nil {
 				p.results <- Result{Input: file, Error: err}
 				return err
@@ -512,8 +511,6 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 
 	mode := CipherMode(header[0])
 	isExec := header[1] == 1
-
-	fmt.Printf("Mode is %d\n", mode)
 
 	// Initialize cipher or AEAD based on mode
 	var err error
