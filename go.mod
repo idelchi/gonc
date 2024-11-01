@@ -4,11 +4,11 @@ go 1.23
 
 require (
 	github.com/go-playground/validator/v10 v10.22.1
-	github.com/golang/protobuf v1.5.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.19.0
 	github.com/tink-crypto/tink-go/v2 v2.2.0
 	golang.org/x/sync v0.8.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
@@ -35,7 +35,6 @@ require (
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
