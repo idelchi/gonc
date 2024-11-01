@@ -32,15 +32,15 @@ func run() error {
 	root.Version = version
 
 	// Add persistent flags - they'll be automatically bound by viper
-	root.Flags().StringP("key", "k", "", "Encryption key (32 bytes, hex-encoded)")
-	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers")
+	root.Flags().StringP("key", "k", "", "Encryption key (64 or 32 bytes, hex-encoded)")
+	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers, defaults to number of CPUs")
 
 	gen := commands.NewGenerateCmd(cfg)
 	encrypt := commands.NewEncryptCmd(cfg)
 	decrypt := commands.NewDecryptCmd(cfg)
 
 	root.Flags().String("encrypt-ext", ".enc", "Suffix to append to encrypted files")
-	root.Flags().String("decrypt-ext", "", "Suffix to append to decrypted files. If empty, the suffix will be removed")
+	root.Flags().String("decrypt-ext", "", "Suffix to append to decrypted files after removing the 'encrypt-ext' suffix")
 
 	// gen.SetHelpFunc(func(command *cobra.Command, strings []string) {
 	// 	// Hide flag for this command
@@ -56,6 +56,8 @@ func run() error {
 		encrypt,
 		decrypt,
 	)
+
+	root.Flags().SortFlags = false
 
 	root.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
 
