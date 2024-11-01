@@ -441,7 +441,7 @@ func (p *Processor) ProcessFiles() error {
 			if result.Error != nil {
 				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.Input, result.Error)
 			} else {
-				fmt.Printf("Processed %s -> %s\n", result.Input, result.Output)
+				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output)
 			}
 		}
 	}()
