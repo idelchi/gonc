@@ -451,6 +451,7 @@ func (p *Processor) ProcessFiles() error {
 		file := file // Capture for closure
 		g.Go(func() error {
 			outPath := p.outputPath(file)
+			fmt.Printf("Processing %q -> %q\n", file, outPath)
 			if err := p.processFile(file, outPath); err != nil {
 				p.results <- Result{Input: file, Error: err}
 				return err
