@@ -26,8 +26,10 @@ type Processor struct {
 }
 
 const (
+	// AES_SIV_KEY_SIZE is the required key size for AES-SIV encryption
 	AES_SIV_KEY_SIZE = 64
-	AES_KEY_SIZE     = 32
+	// AES_KEY_SIZE is the required key size for AES-256 encryption
+	AES_KEY_SIZE = 32
 )
 
 // NewProcessor creates a new Processor with the given configuration.
@@ -88,7 +90,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	} else {
 		// Ensure key length is 32 bytes for AES-256
 		if len(encryptionKey) != AES_KEY_SIZE {
-			return nil, fmt.Errorf("NewProcessor: key must be 32 bytes (64 hex characters) for AES-256")
+			return nil, fmt.Errorf("key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
 		// Initialize AES cipher block for CBC mode
@@ -109,45 +111,49 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
 func (p *Processor) ProcessFiles() error {
-	g := new(errgroupWrapper)
-	g.SetLimit(p.cfg.Parallel)
+	group := new(errgroupWrapper)
+	group.SetLimit(p.cfg.Parallel)
 
 	// Start result printer
 	done := make(chan struct{})
+
 	go func() {
 		defer close(done)
 		for result := range p.results {
 			if result.Error != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", result.Input, result.Error)
+				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error) //nolint: forbidigo
 			} else {
-				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output)
+				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint: forbidigo
 			}
 		}
 	}()
 
 	// Process files
 	for _, file := range p.cfg.Files {
-		file := file // Capture for closure
-		g.Go(func() error {
+		group.Go(func() error {
 			outPath := p.outputPath(file)
 			if err := p.processFile(file, outPath); err != nil {
 				p.results <- Result{Input: file, Error: err}
+
 				return err
 			}
 			p.results <- Result{Input: file, Output: outPath}
+
 			return nil
 		})
 	}
 
-	err := g.Wait()
+	err := group.Wait()
+
 	close(p.results)
 	<-done // Wait for printer to finish
+
 	return err
 }
 
 // encrypt reads data from r, encrypts it using the configured mode,
 // and writes the result to w. The isExec parameter preserves the executable bit information.
-func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
+func (p *Processor) encrypt(reader io.Reader, writer io.Writer, isExec bool) error {
 	var (
 		mode CipherMode
 		err  error
@@ -167,14 +173,14 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 		header = append(header, 0)
 	}
 
-	if _, err := w.Write(header); err != nil {
+	if _, err := writer.Write(header); err != nil {
 		return fmt.Errorf("writing header: %w", err)
 	}
 
 	if p.cfg.Deterministic {
-		err = p.encryptDeterministic(r, w)
+		err = p.encryptDeterministic(reader, writer)
 	} else {
-		err = p.encryptCBC(r, w)
+		err = p.encryptCBC(reader, writer)
 	}
 
 	return err
@@ -183,7 +189,9 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 // decrypt reads encrypted data from r, decrypts it using the mode specified in the header,
 // and writes the result to w. It returns whether the original file was executable.
 func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
-	header := make([]byte, 2)
+	const headerSize = 2
+
+	header := make([]byte, headerSize)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return false, fmt.Errorf("reading header: %w", err)
 	}
@@ -239,9 +247,9 @@ func (p *Processor) processFile(filename, outPath string) error {
 		return fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
-	const EXECUTABLE_BITS = 0o111
+	const executableBits = 0o111
 
-	isExec := info.Mode()&EXECUTABLE_BITS != 0
+	isExec := info.Mode()&executableBits != 0
 
 	// Create temporary output file
 	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
@@ -271,7 +279,9 @@ func (p *Processor) processFile(filename, outPath string) error {
 			return fmt.Errorf("decrypting file: %w", err)
 		}
 		// Set output permissions based on executable bit
-		perm := os.FileMode(0o600)
+		const ownerReadWrite = 0o600
+
+		perm := os.FileMode(ownerReadWrite)
 
 		if execOut {
 			perm |= 0o111
@@ -298,8 +308,13 @@ func (p *Processor) processFile(filename, outPath string) error {
 	}
 
 	// Close files before rename
-	tmpFile.Close()
-	inFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("closing temporary file: %w", err)
+	}
+
+	if err := inFile.Close(); err != nil {
+		return fmt.Errorf("closing input file: %w", err)
+	}
 
 	// Atomic rename
 	if err := os.Rename(tmpName, outPath); err != nil {

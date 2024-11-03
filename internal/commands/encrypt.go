@@ -19,9 +19,10 @@ func NewEncryptCommand(cfg *config.Config) *cobra.Command {
 
 			return validate(cfg, cfg)
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return logic.Run(cfg)
 		},
 	}
+
 	return cmd
 }

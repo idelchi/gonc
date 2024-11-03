@@ -10,9 +10,9 @@ import (
 
 // registerExclusive adds a custom validator ensuring two fields are mutually exclusive.
 // It registers both the validation logic and a human-readable error message.
-func registerExclusive(v *validator.Validator) error {
+func registerExclusive(validator *validator.Validator) error {
 	// Register the exclusive validation
-	if err := v.RegisterValidationAndTranslation(
+	if err := validator.RegisterValidationAndTranslation(
 		"exclusive",
 		validateExclusive,
 		"{0} is mutually exclusive",
@@ -20,14 +20,18 @@ func registerExclusive(v *validator.Validator) error {
 		return fmt.Errorf("registering exclusive validation: %w", err)
 	}
 
-	v.Validator().RegisterTagNameFunc(func(fld reflect.StructField) string {
-		name := strings.SplitN(fld.Tag.Get("label"), ",", 2)[0]
+	validator.Validator().RegisterTagNameFunc(func(fld reflect.StructField) string {
+		const splitSize = 2
+
+		name := strings.SplitN(fld.Tag.Get("label"), ",", splitSize)[0]
 		if name == "-" {
 			return fld.Name
 		}
+
 		if name != "" {
 			return name
 		}
+
 		return fld.Name
 	})
 

@@ -21,10 +21,10 @@ func NewRootCommand(cfg *config.Config, version string) *cobra.Command {
 		Long: `A file encryption utility that supports deterministic and non-deterministic modes.
 Provides commands for key generation, encryption, and decryption.`,
 		TraverseChildren: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Must provide a subcommand. Run 'gonc --help' for usage.")
+		Run: func(_ *cobra.Command, _ []string) {
+			fmt.Println("Must provide a subcommand. Run 'gonc --help' for usage.") //nolint: forbidigo
 		},
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper.SetEnvPrefix(cmd.Root().Name())
 			viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 			viper.AutomaticEnv()

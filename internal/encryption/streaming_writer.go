@@ -57,10 +57,12 @@ func (sw *streamingWriter) flushChunk(size int) error {
 	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil {
 		return fmt.Errorf("writing chunk size: %w", err)
 	}
+
 	if _, err := sw.w.Write(encrypted); err != nil {
 		return fmt.Errorf("writing encrypted chunk: %w", err)
 	}
 
 	sw.buffer = sw.buffer[size:]
+
 	return nil
 }
