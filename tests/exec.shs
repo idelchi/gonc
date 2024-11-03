@@ -4,7 +4,7 @@ set -euo pipefail
 # cd to script directory
 cd "$(dirname "$0")"
 git config --global --add safe.directory "*"
-go install ./...
+go install ../...
 
 rm -rf __tmp__
 mkdir __tmp__
@@ -74,11 +74,6 @@ cd ..
 
 #!/bin/bash
 set -euo pipefail
-
-# cd to script directory
-cd "$(dirname "$0")"
-git config --global --add safe.directory "*"
-go install ./...
 
 rm -rf __tmp__
 mkdir __tmp__

@@ -19,9 +19,9 @@ type Suffixes struct {
 // Key contains the encryption key.
 type Key struct {
 	// Key in hexadecimal format
-	String string `label:"--key"      mapstructure:"key"      mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File"`
+	String string `label:"--key" mapstructure:"key" mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File"`
 	// Key in a file
-	File string `label:"--key-file" mapstructure:"key-file"              validate:"exclusive=String"`
+	File string `label:"--key-file" mapstructure:"key-file" validate:"exclusive=String"`
 }
 
 // Config contains the application configuration.

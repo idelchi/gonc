@@ -26,9 +26,9 @@ type Processor struct {
 }
 
 const (
-	// AES_SIV_KEY_SIZE is the required key size for AES-SIV encryption
+	// AES_SIV_KEY_SIZE is the required key size for AES-SIV encryption.
 	AES_SIV_KEY_SIZE = 64
-	// AES_KEY_SIZE is the required key size for AES-256 encryption
+	// AES_KEY_SIZE is the required key size for AES-256 encryption.
 	AES_KEY_SIZE = 32
 )
 
@@ -121,7 +121,7 @@ func (p *Processor) ProcessFiles() error {
 		defer close(done)
 		for result := range p.results {
 			if result.Error != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error) //nolint: forbidigo
+				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error) 
 			} else {
 				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint: forbidigo
 			}
