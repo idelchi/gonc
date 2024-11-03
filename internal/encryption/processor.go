@@ -11,6 +11,7 @@ import (
 
 	"github.com/tink-crypto/tink-go/v2/daead"
 	"github.com/tink-crypto/tink-go/v2/tink"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/idelchi/gogen/pkg/key"
 	"github.com/idelchi/gonc/internal/config"
@@ -18,11 +19,16 @@ import (
 
 // Processor handles the encryption and decryption of files.
 type Processor struct {
-	cfg     *config.Config         // Configuration for the processor
-	cipher  cipher.Block           // AES cipher block
-	daead   tink.DeterministicAEAD // Tink Deterministic AEAD primitive
-	key     []byte                 // Key bytes for deferred initialization
-	results chan Result            // Channel for collecting processing results
+	// cfg contains runtime configuration options
+	cfg *config.Config
+	// cipher holds the AES block cipher for CBC mode
+	cipher cipher.Block
+	// daead provides deterministic authenticated encryption
+	daead tink.DeterministicAEAD
+	// key stores raw key bytes for deferred cipher initialization
+	key []byte
+	// results channels processing outcomes to the printer goroutine
+	results chan Result
 }
 
 const (
@@ -111,34 +117,31 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
 func (p *Processor) ProcessFiles() error {
-	group := new(errgroupWrapper)
+	group := errgroup.Group{}
 	group.SetLimit(p.cfg.Parallel)
 
-	// Start result printer
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
+
 		for result := range p.results {
 			if result.Error != nil {
-				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error) 
+				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error)
 			} else {
-				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint: forbidigo
+				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output)
 			}
 		}
 	}()
 
-	// Process files
 	for _, file := range p.cfg.Files {
 		group.Go(func() error {
 			outPath := p.outputPath(file)
 			if err := p.processFile(file, outPath); err != nil {
 				p.results <- Result{Input: file, Error: err}
-
 				return err
 			}
 			p.results <- Result{Input: file, Output: outPath}
-
 			return nil
 		})
 	}
@@ -165,7 +168,6 @@ func (p *Processor) encrypt(reader io.Reader, writer io.Writer, isExec bool) err
 		mode = ModeCBC
 	}
 
-	// Write header with mode and executable bit
 	header := []byte{byte(mode)}
 	if isExec {
 		header = append(header, 1)
@@ -199,15 +201,12 @@ func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
 	mode := CipherMode(header[0])
 	isExec := header[1] == 1
 
-	// Initialize cipher or AEAD based on mode
 	switch mode {
 	case ModeDeterministic:
-		// Ensure key length is 64 bytes for AES-SIV
 		if len(p.key) != AES_SIV_KEY_SIZE {
 			return false, fmt.Errorf("decrypt: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
-		// Initialize Deterministic AEAD
 		kh, err := newDeterministicAEADKeyHandle(p.key)
 		if err != nil {
 			return false, fmt.Errorf("creating keyset handle: %w", err)
@@ -220,14 +219,11 @@ func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
 
 		return isExec, p.decryptDeterministic(reader, writer)
 	case ModeCBC:
-		// Ensure key length is 32 bytes for AES-256
 		if len(p.key) != AES_KEY_SIZE {
 			return false, fmt.Errorf("decrypt: key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
 		var err error
-
-		// Initialize AES cipher block for CBC mode
 		p.cipher, err = aes.NewCipher(p.key)
 		if err != nil {
 			return false, fmt.Errorf("creating cipher: %w", err)
@@ -248,17 +244,14 @@ func (p *Processor) processFile(filename, outPath string) error {
 	}
 
 	const executableBits = 0o111
-
 	isExec := info.Mode()&executableBits != 0
 
-	// Create temporary output file
 	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("creating temporary file: %w", err)
 	}
 
 	tmpName := tmpFile.Name()
-
 	defer func() {
 		tmpFile.Close()
 		if err != nil {
@@ -270,23 +263,20 @@ func (p *Processor) processFile(filename, outPath string) error {
 	if err != nil {
 		return fmt.Errorf("opening input file: %w", err)
 	}
-
 	defer inFile.Close()
+
+	const ownerReadWrite = 0o600
 
 	if p.cfg.Decrypt {
 		execOut, err := p.decrypt(inFile, tmpFile)
 		if err != nil {
 			return fmt.Errorf("decrypting file: %w", err)
 		}
-		// Set output permissions based on executable bit
-		const ownerReadWrite = 0o600
 
 		perm := os.FileMode(ownerReadWrite)
-
 		if execOut {
 			perm |= 0o111
 		}
-
 		if err := os.Chmod(tmpName, perm); err != nil {
 			return fmt.Errorf("setting file permissions: %w", err)
 		}
@@ -294,20 +284,15 @@ func (p *Processor) processFile(filename, outPath string) error {
 		if err := p.encrypt(inFile, tmpFile, isExec); err != nil {
 			return fmt.Errorf("encrypting file: %w", err)
 		}
-
-		// Set output permissions
-		perm := os.FileMode(0o600)
-
+		perm := os.FileMode(ownerReadWrite)
 		if isExec {
 			perm |= 0o111
 		}
-
 		if err := os.Chmod(tmpName, perm); err != nil {
 			return fmt.Errorf("setting file permissions: %w", err)
 		}
 	}
 
-	// Close files before rename
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("closing temporary file: %w", err)
 	}
@@ -316,7 +301,6 @@ func (p *Processor) processFile(filename, outPath string) error {
 		return fmt.Errorf("closing input file: %w", err)
 	}
 
-	// Atomic rename
 	if err := os.Rename(tmpName, outPath); err != nil {
 		return fmt.Errorf("renaming output file: %w", err)
 	}

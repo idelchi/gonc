@@ -16,6 +16,7 @@ import (
 )
 
 // encryptDeterministic encrypts the input file using deterministic encryption.
+// It streams data through a deterministic AEAD writer for memory efficiency.
 func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 	sw := newStreamingWriter(w, p.daead, nil)
 	defer sw.Close()
@@ -23,7 +24,6 @@ func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 	buf := bufferPool.Get().([]byte)
 	defer bufferPool.Put(buf)
 
-	// Stream data through the encrypting writer
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
@@ -43,6 +43,7 @@ func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 }
 
 // decryptDeterministic decrypts the input file using deterministic encryption.
+// It reads and processes encrypted chunks sequentially.
 func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
 	br := bufio.NewReader(r)
 
@@ -77,6 +78,8 @@ func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
 	return nil
 }
 
+// newDeterministicAEADKeyHandle creates a Tink keyset handle for AES-SIV from raw key bytes.
+// The handle is used to initialize the deterministic AEAD primitive.
 func newDeterministicAEADKeyHandle(key []byte) (*keyset.Handle, error) {
 	// Create an AesSivKey proto message
 	aesSivKey := &aes_sivpb.AesSivKey{
