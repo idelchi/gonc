@@ -45,7 +45,8 @@ Provides commands for key generation, encryption, and decryption.`,
 	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers, defaults to number of CPUs")
 
 	root.Flags().StringP("key", "k", "", "Encryption key (64 or 32 bytes, hex-encoded)")
-	root.Flags().StringP("key-file", "f", "", "Path to the key file with the encryption key (64 or 32 bytes, hex-encoded)")
+	root.Flags().
+		StringP("key-file", "f", "", "Path to the key file with the encryption key (64 or 32 bytes, hex-encoded)")
 	root.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
 
 	root.Flags().String("encrypt-ext", ".enc", "Suffix to append to encrypted files")

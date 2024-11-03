@@ -7,6 +7,7 @@ import (
 	"github.com/idelchi/gonc/internal/logic"
 )
 
+// NewEncryptCommand creates a new cobra command for the encrypt subcommand.
 func NewEncryptCommand(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "encrypt [flags] files...",

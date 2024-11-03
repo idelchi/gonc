@@ -10,12 +10,12 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-gogen key > key
+gogen key >key
 
 KEY=$(cat key)
 
 # Create a test executable file
-cat > test.sh << 'EOF'
+cat >test.sh <<'EOF'
 #!/bin/bash
 echo "Hello, I am executable!"
 EOF
@@ -24,11 +24,11 @@ EOF
 chmod +x test.sh
 
 # Verify initial executable status
-if [ -x "test.sh" ]; then
-    echo "✓ Initial file is executable"
+if [[ -x "test.sh" ]]; then
+  echo "✓ Initial file is executable"
 else
-    echo "✗ Failed: Initial file is not executable"
-    exit 1
+  echo "✗ Failed: Initial file is not executable"
+  exit 1
 fi
 
 # Encrypt the file
@@ -37,34 +37,33 @@ fi
 gonc -k "${KEY}" encrypt test.sh
 
 # Verify encrypted file was created
-if [ ! -f "test.sh.enc" ]; then
-    echo "✗ Failed: Encrypted file was not created"
-    exit 1
+if [[ ! -f "test.sh.enc" ]]; then
+  echo "✗ Failed: Encrypted file was not created"
+  exit 1
 fi
 
 # Decrypt the file
 gonc -k "${KEY}" --decrypt-ext .dec decrypt test.sh.enc
 
-
 # Verify decrypted file was created
-if [ ! -f "test.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file was not created"
-    exit 1
+if [[ ! -f "test.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file was not created"
+  exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test.sh.dec" ]; then
-    echo "✓ Decrypted file is still executable"
+if [[ -x "test.sh.dec" ]]; then
+  echo "✓ Decrypted file is still executable"
 else
-    echo "✗ Failed: Decrypted file lost executable bit"
-    exit 1
+  echo "✗ Failed: Decrypted file lost executable bit"
+  exit 1
 fi
 
 if cmp -s test.sh.dec test.sh; then
-    echo "✓ File content preserved correctly"
+  echo "✓ File content preserved correctly"
 else
-    echo "✗ Failed: File content changed"
-    exit 1
+  echo "✗ Failed: File content changed"
+  exit 1
 fi
 
 # Cleanup
@@ -85,12 +84,12 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-gogen key -l 64 > key
+gogen key -l 64 >key
 
 KEY=$(cat key)
 
 # Create a test executable file
-cat > test.sh << 'EOF'
+cat >test.sh <<'EOF'
 #!/bin/bash
 echo "Hello, I am executable!"
 EOF
@@ -99,11 +98,11 @@ EOF
 chmod +x test.sh
 
 # Verify initial executable status
-if [ -x "test.sh" ]; then
-    echo "✓ Initial file is executable"
+if [[ -x "test.sh" ]]; then
+  echo "✓ Initial file is executable"
 else
-    echo "✗ Failed: Initial file is not executable"
-    exit 1
+  echo "✗ Failed: Initial file is not executable"
+  exit 1
 fi
 
 # Encrypt the file
@@ -112,34 +111,33 @@ fi
 gonc -d -k "${KEY}" encrypt test.sh
 
 # Verify encrypted file was created
-if [ ! -f "test.sh.enc" ]; then
-    echo "✗ Failed: Encrypted file was not created"
-    exit 1
+if [[ ! -f "test.sh.enc" ]]; then
+  echo "✗ Failed: Encrypted file was not created"
+  exit 1
 fi
 
 # Decrypt the file
 gonc -k "${KEY}" --decrypt-ext .dec decrypt test.sh.enc
 
-
 # Verify decrypted file was created
-if [ ! -f "test.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file was not created"
-    exit 1
+if [[ ! -f "test.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file was not created"
+  exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test.sh.dec" ]; then
-    echo "✓ Decrypted file is still executable"
+if [[ -x "test.sh.dec" ]]; then
+  echo "✓ Decrypted file is still executable"
 else
-    echo "✗ Failed: Decrypted file lost executable bit"
-    exit 1
+  echo "✗ Failed: Decrypted file lost executable bit"
+  exit 1
 fi
 
 if cmp -s test.sh.dec test.sh; then
-    echo "✓ File content preserved correctly"
+  echo "✓ File content preserved correctly"
 else
-    echo "✗ Failed: File content changed"
-    exit 1
+  echo "✗ Failed: File content changed"
+  exit 1
 fi
 
 # Cleanup

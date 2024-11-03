@@ -9,10 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/idelchi/gogen/pkg/key"
-	"github.com/idelchi/gonc/internal/config"
 	"github.com/tink-crypto/tink-go/v2/daead"
 	"github.com/tink-crypto/tink-go/v2/tink"
+
+	"github.com/idelchi/gogen/pkg/key"
+	"github.com/idelchi/gonc/internal/config"
 )
 
 // Processor handles the encryption and decryption of files.
@@ -23,6 +24,11 @@ type Processor struct {
 	key     []byte                 // Key bytes for deferred initialization
 	results chan Result            // Channel for collecting processing results
 }
+
+const (
+	AES_SIV_KEY_SIZE = 64
+	AES_KEY_SIZE     = 32
+)
 
 // NewProcessor creates a new Processor with the given configuration.
 // It initializes the AES cipher or stores the key for deferred initialization.
@@ -65,7 +71,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 
 	if cfg.Deterministic {
 		// Ensure key length is 64 bytes for AES-SIV
-		if len(encryptionKey) != 64 {
+		if len(encryptionKey) != AES_SIV_KEY_SIZE {
 			return nil, fmt.Errorf("NewProcessor: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
@@ -81,7 +87,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 		}
 	} else {
 		// Ensure key length is 32 bytes for AES-256
-		if len(encryptionKey) != 32 {
+		if len(encryptionKey) != AES_KEY_SIZE {
 			return nil, fmt.Errorf("NewProcessor: key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
@@ -176,9 +182,9 @@ func (p *Processor) encrypt(r io.Reader, w io.Writer, isExec bool) error {
 
 // decrypt reads encrypted data from r, decrypts it using the mode specified in the header,
 // and writes the result to w. It returns whether the original file was executable.
-func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
+func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
 	header := make([]byte, 2)
-	if _, err := io.ReadFull(r, header); err != nil {
+	if _, err := io.ReadFull(reader, header); err != nil {
 		return false, fmt.Errorf("reading header: %w", err)
 	}
 
@@ -186,11 +192,10 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 	isExec := header[1] == 1
 
 	// Initialize cipher or AEAD based on mode
-	var err error
 	switch mode {
 	case ModeDeterministic:
 		// Ensure key length is 64 bytes for AES-SIV
-		if len(p.key) != 64 {
+		if len(p.key) != AES_SIV_KEY_SIZE {
 			return false, fmt.Errorf("decrypt: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
@@ -205,12 +210,14 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 			return false, fmt.Errorf("creating DeterministicAEAD: %w", err)
 		}
 
-		err = p.decryptDeterministic(r, w)
+		return isExec, p.decryptDeterministic(reader, writer)
 	case ModeCBC:
 		// Ensure key length is 32 bytes for AES-256
-		if len(p.key) != 32 {
+		if len(p.key) != AES_KEY_SIZE {
 			return false, fmt.Errorf("decrypt: key must be 32 bytes (64 hex characters) for AES-256")
 		}
+
+		var err error
 
 		// Initialize AES cipher block for CBC mode
 		p.cipher, err = aes.NewCipher(p.key)
@@ -218,12 +225,10 @@ func (p *Processor) decrypt(r io.Reader, w io.Writer) (bool, error) {
 			return false, fmt.Errorf("creating cipher: %w", err)
 		}
 
-		err = p.decryptCBC(r, w)
+		return isExec, p.decryptCBC(reader, writer)
 	default:
 		return false, fmt.Errorf("unknown encryption mode: %d", mode)
 	}
-
-	return isExec, err
 }
 
 // processFile handles the encryption or decryption of a single file.
@@ -234,14 +239,18 @@ func (p *Processor) processFile(filename, outPath string) error {
 		return fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
-	isExec := info.Mode()&0o111 != 0
+	const EXECUTABLE_BITS = 0o111
+
+	isExec := info.Mode()&EXECUTABLE_BITS != 0
 
 	// Create temporary output file
 	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
 	if err != nil {
 		return fmt.Errorf("creating temporary file: %w", err)
 	}
+
 	tmpName := tmpFile.Name()
+
 	defer func() {
 		tmpFile.Close()
 		if err != nil {
@@ -253,30 +262,36 @@ func (p *Processor) processFile(filename, outPath string) error {
 	if err != nil {
 		return fmt.Errorf("opening input file: %w", err)
 	}
+
 	defer inFile.Close()
 
 	if p.cfg.Decrypt {
 		execOut, err := p.decrypt(inFile, tmpFile)
 		if err != nil {
-			return err
+			return fmt.Errorf("decrypting file: %w", err)
 		}
 		// Set output permissions based on executable bit
 		perm := os.FileMode(0o600)
+
 		if execOut {
 			perm |= 0o111
 		}
+
 		if err := os.Chmod(tmpName, perm); err != nil {
 			return fmt.Errorf("setting file permissions: %w", err)
 		}
 	} else {
 		if err := p.encrypt(inFile, tmpFile, isExec); err != nil {
-			return err
+			return fmt.Errorf("encrypting file: %w", err)
 		}
+
 		// Set output permissions
 		perm := os.FileMode(0o600)
+
 		if isExec {
 			perm |= 0o111
 		}
+
 		if err := os.Chmod(tmpName, perm); err != nil {
 			return fmt.Errorf("setting file permissions: %w", err)
 		}

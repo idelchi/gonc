@@ -10,27 +10,37 @@ import (
 // ErrUsage indicates an error in command-line usage or configuration.
 var ErrUsage = errors.New("usage error")
 
+// Suffixes contains the file suffixes for encrypted and decrypted files.
 type Suffixes struct {
 	Encrypt string `mapstructure:"encrypt-ext"`
 	Decrypt string `mapstructure:"decrypt-ext"`
 }
 
+// Key contains the encryption key.
 type Key struct {
-	String string `mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File" mapstructure:"key" label:"--key"`
-	File   string `validate:"exclusive=String" mapstructure:"key-file" label:"--key-file"`
+	// Key in hexadecimal format
+	String string `label:"--key" mapstructure:"key" mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File"`
+	// Key in a file
+	File string `label:"--key-file" mapstructure:"key-file" validate:"exclusive=String"`
 }
 
+// Config contains the application configuration.
 type Config struct {
 	// Show the configuration and exit
-	Show     bool
+	Show bool
+	// Number of files to process in parallel
 	Parallel int
 
-	Key           Key      `mapstructure:",squash"`
-	Suffixes      Suffixes `mapstructure:",squash"`
+	// Key holds the encryption key as a string or a file
+	Key Key `mapstructure:",squash"`
+	// Suffixes for encrypted and decrypted files
+	Suffixes Suffixes `mapstructure:",squash"`
+	// Encryption mode
 	Deterministic bool
-	Decrypt       bool `mapstructure:"-"`
+	// Decrypt files
+	Decrypt bool `mapstructure:"-"`
 
-	// Positional arguments
+	// Files to process
 	Files []string `validate:"required"`
 }
 

@@ -7,11 +7,17 @@ import (
 	"github.com/idelchi/gonc/internal/encryption"
 )
 
+// Run is the main logic of the application.
 func Run(cfg *config.Config) error {
 	proc, err := encryption.NewProcessor(cfg)
 	if err != nil {
 		return fmt.Errorf("creating processor: %w", err)
 	}
 
-	return proc.ProcessFiles()
+	err = proc.ProcessFiles()
+	if err != nil {
+		return fmt.Errorf("processing files: %w", err)
+	}
+
+	return nil
 }

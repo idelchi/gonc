@@ -67,9 +67,9 @@ tasks:
       ignore_error: true
     - cmd: task go:lint
       ignore_error: true
-    # deps:
-    #   - lint:default
-    #   - go:lint
+      # deps:
+      #   - lint:default
+      #   - go:lint
 
   build:
     - task: go:build

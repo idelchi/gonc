@@ -9,6 +9,7 @@ import (
 	"io"
 )
 
+// encryptCBC encrypts the input file using AES in CBC mode.
 func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 	// Generate and write IV
 	iv := make([]byte, aes.BlockSize)
@@ -75,6 +76,7 @@ func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 	return nil
 }
 
+// decryptCBC decrypts the input file using AES in CBC mode.
 func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
 	// Read IV
 	iv := make([]byte, aes.BlockSize)

@@ -1,11 +1,15 @@
 package commands
 
 import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
 	"github.com/idelchi/gonc/internal/config"
 	"github.com/idelchi/gonc/internal/logic"
-	"github.com/spf13/cobra"
 )
 
+// NewDecryptCommand creates a new cobra command for the decrypt subcommand.
 func NewDecryptCommand(cfg *config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:     "decrypt [flags] files...",
@@ -18,10 +22,12 @@ func NewDecryptCommand(cfg *config.Config) *cobra.Command {
 
 			return validate(cfg, cfg)
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			err := logic.Run(cfg)
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if err := logic.Run(cfg); err != nil {
+				return fmt.Errorf("running logic: %w", err)
+			}
 
-			return err
+			return nil
 		},
 	}
 }

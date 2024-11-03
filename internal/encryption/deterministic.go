@@ -11,9 +11,11 @@ import (
 	"github.com/tink-crypto/tink-go/v2/keyset"
 	aes_sivpb "github.com/tink-crypto/tink-go/v2/proto/aes_siv_go_proto"
 	tinkpb "github.com/tink-crypto/tink-go/v2/proto/tink_go_proto"
+
 	"google.golang.org/protobuf/proto"
 )
 
+// encryptDeterministic encrypts the input file using deterministic encryption.
 func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 	sw := newStreamingWriter(w, p.daead, nil)
 	defer sw.Close()
@@ -40,6 +42,7 @@ func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 	return nil
 }
 
+// decryptDeterministic decrypts the input file using deterministic encryption.
 func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
 	br := bufio.NewReader(r)
 

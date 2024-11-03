@@ -13,17 +13,17 @@ cd __tmp__
 KEY=$(gogen key)
 
 # Create a test executable file
-cat > test2.sh << 'EOF'
+cat >test2.sh <<'EOF'
 echo "Hello, I am NOT executable!"
 EOF
 
 # Verify initial executable status
-if [ -x "test2.sh" ]; then
-    echo "✗ Failed: Initial file is executable"
-    exit 1
+if [[ -x "test2.sh" ]]; then
+  echo "✗ Failed: Initial file is executable"
+  exit 1
 
 else
-    echo "✓ Initial file is not executable"
+  echo "✓ Initial file is not executable"
 fi
 
 # Encrypt the file
@@ -32,37 +32,36 @@ fi
 gonc -k "${KEY}" encrypt test2.sh
 
 # Verify encrypted file was created
-if [ ! -f "test2.sh.enc" ]; then
-    echo "✗ Failed: Encrypted file was not created"
-    exit 1
+if [[ ! -f "test2.sh.enc" ]]; then
+  echo "✗ Failed: Encrypted file was not created"
+  exit 1
 fi
 
 # Decrypt the file
 gonc --decrypt-ext .dec -k "${KEY}" decrypt test2.sh.enc
 
 # Verify decrypted file was created
-if [ ! -f "test2.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file was not created"
-    exit 1
+if [[ ! -f "test2.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file was not created"
+  exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test2.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file is executable"
-    exit 1
+if [[ -x "test2.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file is executable"
+  exit 1
 else
-    echo "✓ Decrypted file has no executable bit"
+  echo "✓ Decrypted file has no executable bit"
 fi
 
 if cmp -s test2.sh.dec test2.sh; then
-    echo "✓ File content preserved correctly"
+  echo "✓ File content preserved correctly"
 else
-    echo "✗ Failed: File content changed"
-    exit 1
+  echo "✗ Failed: File content changed"
+  exit 1
 fi
 
 cd ..
-
 
 #!/bin/bash
 set -euo pipefail
@@ -79,17 +78,17 @@ cd __tmp__
 KEY=$(gogen key -l 64)
 
 # Create a test executable file
-cat > test2.sh << 'EOF'
+cat >test2.sh <<'EOF'
 echo "Hello, I am NOT executable!"
 EOF
 
 # Verify initial executable status
-if [ -x "test2.sh" ]; then
-    echo "✗ Failed: Initial file is executable"
-    exit 1
+if [[ -x "test2.sh" ]]; then
+  echo "✗ Failed: Initial file is executable"
+  exit 1
 
 else
-    echo "✓ Initial file is not executable"
+  echo "✓ Initial file is not executable"
 fi
 
 # Encrypt the file
@@ -98,31 +97,31 @@ fi
 gonc -d -k "${KEY}" encrypt test2.sh
 
 # Verify encrypted file was created
-if [ ! -f "test2.sh.enc" ]; then
-    echo "✗ Failed: Encrypted file was not created"
-    exit 1
+if [[ ! -f "test2.sh.enc" ]]; then
+  echo "✗ Failed: Encrypted file was not created"
+  exit 1
 fi
 
 # Decrypt the file
 gonc --decrypt-ext .dec -k "${KEY}" decrypt test2.sh.enc
 
 # Verify decrypted file was created
-if [ ! -f "test2.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file was not created"
-    exit 1
+if [[ ! -f "test2.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file was not created"
+  exit 1
 fi
 
 # Verify executable bit was preserved
-if [ -x "test2.sh.dec" ]; then
-    echo "✗ Failed: Decrypted file is executable"
-    exit 1
+if [[ -x "test2.sh.dec" ]]; then
+  echo "✗ Failed: Decrypted file is executable"
+  exit 1
 else
-    echo "✓ Decrypted file has no executable bit"
+  echo "✓ Decrypted file has no executable bit"
 fi
 
 if cmp -s test2.sh.dec test2.sh; then
-    echo "✓ File content preserved correctly"
+  echo "✓ File content preserved correctly"
 else
-    echo "✗ Failed: File content changed"
-    exit 1
+  echo "✗ Failed: File content changed"
+  exit 1
 fi

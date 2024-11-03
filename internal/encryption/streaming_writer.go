@@ -8,7 +8,7 @@ import (
 	"github.com/tink-crypto/tink-go/v2/tink"
 )
 
-// streamingWriter wraps an io.Writer with deterministic encryption capabilities
+// streamingWriter wraps an io.Writer with deterministic encryption capabilities.
 type streamingWriter struct {
 	w              io.Writer
 	daead          tink.DeterministicAEAD

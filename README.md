@@ -1,6 +1,7 @@
 # gonc
 
-`gonc` is a simple command-line utility that provides secure file encryption with support for deterministic and non-deterministic modes.
+`gonc` is a simple command-line utility that provides secure file encryption,
+with support for deterministic and non-deterministic modes.
 
 It provides commands for encryption and decryption.
 
