@@ -3,13 +3,13 @@ package encryption
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/idelchi/gogen/pkg/key"
 	"github.com/idelchi/gonc/internal/config"
 	"github.com/tink-crypto/tink-go/v2/daead"
 	"github.com/tink-crypto/tink-go/v2/tink"
@@ -17,7 +17,7 @@ import (
 
 // Processor handles the encryption and decryption of files.
 type Processor struct {
-	cfg     config.Config          // Configuration for the processor
+	cfg     *config.Config         // Configuration for the processor
 	cipher  cipher.Block           // AES cipher block
 	daead   tink.DeterministicAEAD // Tink Deterministic AEAD primitive
 	key     []byte                 // Key bytes for deferred initialization
@@ -26,17 +26,33 @@ type Processor struct {
 
 // NewProcessor creates a new Processor with the given configuration.
 // It initializes the AES cipher or stores the key for deferred initialization.
-func NewProcessor(cfg config.Config) (*Processor, error) {
-	keyBytes, err := hex.DecodeString(cfg.Key)
+func NewProcessor(cfg *config.Config) (*Processor, error) {
+	var (
+		encryptionKey []byte
+		err           error
+	)
+
+	switch {
+	case cfg.Key.String != "":
+		encryptionKey, err = key.FromHex(cfg.Key.String)
+	case cfg.Key.File != "":
+		encryptionKey, err = os.ReadFile(cfg.Key.File)
+		if err != nil {
+			return nil, fmt.Errorf("reading key file: %w", err)
+		}
+
+		encryptionKey, err = key.FromHex(string(encryptionKey))
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("decoding key: %w", err)
+		return nil, fmt.Errorf("reading key: %w", err)
 	}
 
 	if cfg.Decrypt {
 		// Defer cipher initialization until after reading the encryption mode
 		return &Processor{
 			cfg:     cfg,
-			key:     keyBytes,
+			key:     encryptionKey,
 			results: make(chan Result, len(cfg.Files)),
 		}, nil
 	}
@@ -49,12 +65,12 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 
 	if cfg.Deterministic {
 		// Ensure key length is 64 bytes for AES-SIV
-		if len(keyBytes) != 64 {
+		if len(encryptionKey) != 64 {
 			return nil, fmt.Errorf("NewProcessor: key must be 64 bytes (128 hex characters) for AES-SIV")
 		}
 
 		// Initialize Deterministic AEAD
-		kh, err := newDeterministicAEADKeyHandle(keyBytes)
+		kh, err := newDeterministicAEADKeyHandle(encryptionKey)
 		if err != nil {
 			return nil, fmt.Errorf("creating keyset handle: %w", err)
 		}
@@ -65,12 +81,12 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 		}
 	} else {
 		// Ensure key length is 32 bytes for AES-256
-		if len(keyBytes) != 32 {
+		if len(encryptionKey) != 32 {
 			return nil, fmt.Errorf("NewProcessor: key must be 32 bytes (64 hex characters) for AES-256")
 		}
 
 		// Initialize AES cipher block for CBC mode
-		block, err = aes.NewCipher(keyBytes)
+		block, err = aes.NewCipher(encryptionKey)
 		if err != nil {
 			return nil, fmt.Errorf("creating cipher: %w", err)
 		}
@@ -281,10 +297,10 @@ func (p *Processor) processFile(filename, outPath string) error {
 // outputPath generates the output file path based on the input filename
 // and the configured suffixes for encryption/decryption.
 func (p *Processor) outputPath(filename string) string {
-	ext := p.cfg.EncryptSuffix
+	ext := p.cfg.Suffixes.Encrypt
 	if p.cfg.Decrypt {
-		filename = strings.TrimSuffix(filename, p.cfg.EncryptSuffix)
-		ext = p.cfg.DecryptSuffix
+		filename = strings.TrimSuffix(filename, p.cfg.Suffixes.Encrypt)
+		ext = p.cfg.Suffixes.Decrypt
 	}
 
 	return filepath.Join(filepath.Dir(filename),

@@ -2,7 +2,7 @@
 
 `gonc` is a simple command-line utility that provides secure file encryption with support for deterministic and non-deterministic modes.
 
-It provides commands for key generation, encryption, and decryption.
+It provides commands for encryption and decryption.
 
 ## Installation
 
@@ -28,7 +28,8 @@ Run `gonc` with the desired flags. The available flags include:
 
 ```sh
 Flags:
-  -k, --key string            Encryption key (32 bytes, hex-encoded)
+  -k, --key string            Encryption key (32/64 bytes, hex-encoded)
+  -f, --key-file string       Path to a file containing the encryption key (32/64 bytes, hex-encoded)
   -j, --parallel int          Number of parallel workers (defaults to the number of CPUs)
       --decrypt-ext string    Suffix to append to decrypted files, after stripping the encrypted suffix (default "")
       --encrypt-ext string    Suffix to append to encrypted files (default ".enc")
@@ -41,7 +42,6 @@ The utility supports the following commands:
 
 ```sh
 Available Commands:
-  generate      Generate a new encryption key (aliases: gen)
   encrypt       Encrypt files (aliases: enc)
   decrypt       Decrypt files (aliases: dec)
   help          Help about any command
@@ -50,10 +50,7 @@ Available Commands:
 Example:
 
 ```sh
-# Generate a new encryption key
-gonc generate
-
-# Encrypt files with the generated key
+# Encrypt files
 gonc -k <key> encrypt file1.txt file2.txt
 
 # Decrypt files

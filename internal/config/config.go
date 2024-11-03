@@ -1,39 +1,57 @@
 package config
 
 import (
-	"encoding/hex"
+	"errors"
 	"fmt"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/idelchi/gogen/pkg/validator"
 )
 
-type Config struct {
-	// Common flags
-	Key           string
-	Parallel      int
-	EncryptSuffix string `mapstructure:"encrypt-ext"`
-	DecryptSuffix string `mapstructure:"decrypt-ext"`
+// ErrUsage indicates an error in command-line usage or configuration.
+var ErrUsage = errors.New("usage error")
 
-	// Command-specific flags
-	Deterministic bool
-	Decrypt       bool
-	Length        int
-
-	// Positional arguments
-	Files []string `validate:"min=1"`
+type Suffixes struct {
+	Encrypt string `mapstructure:"encrypt-ext"`
+	Decrypt string `mapstructure:"decrypt-ext"`
 }
 
-// Validate validates the configuration against the struct tags
-func (c Config) Validate() error {
-	validate := validator.New()
+type Key struct {
+	String string `mask:"fixed" validate:"hexadecimal,len=64,exclusive=File" mapstructure:"key" label:"--key"`
+	File   string `validate:"exclusive=String" mapstructure:"key-file" label:"--key-file"`
+}
 
-	if err := validate.Struct(c); err != nil {
-		return fmt.Errorf("validating configuration: %w", err)
+type Config struct {
+	// Show the configuration and exit
+	Show     bool
+	Parallel int
+
+	Key           Key      `mapstructure:",squash"`
+	Suffixes      Suffixes `mapstructure:",squash"`
+	Deterministic bool
+	Decrypt       bool `mapstructure:"-"`
+
+	// Positional arguments
+	Files []string `validate:"required"`
+}
+
+// Validate performs configuration validation using the validator package.
+// It returns a wrapped ErrUsage if any validation rules are violated.
+func Validate(config any) error {
+	validator := validator.NewValidator()
+
+	if err := registerExclusive(validator); err != nil {
+		return fmt.Errorf("registering exclusive: %w", err)
 	}
 
-	// Additional key validation
-	if _, err := hex.DecodeString(c.Key); err != nil {
-		return fmt.Errorf("invalid key format: %w", err)
+	errs := validator.Validate(config)
+
+	switch {
+	case errs == nil:
+		return nil
+	case len(errs) == 1:
+		return fmt.Errorf("%w: %w", ErrUsage, errs[0])
+	case len(errs) > 1:
+		return fmt.Errorf("%ws:\n%w", ErrUsage, errors.Join(errs...))
 	}
 
 	return nil
