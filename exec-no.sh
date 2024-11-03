@@ -10,7 +10,7 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-KEY=$(gonc generate)
+KEY=$(gogen key)
 
 # Create a test executable file
 cat > test2.sh << 'EOF'
@@ -76,7 +76,7 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-KEY=$(gonc -d generate)
+KEY=$(gogen key -l 64)
 
 # Create a test executable file
 cat > test2.sh << 'EOF'

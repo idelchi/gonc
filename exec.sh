@@ -10,7 +10,7 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-gonc generate > key
+gogen key > key
 
 KEY=$(cat key)
 
@@ -85,7 +85,7 @@ rm -rf __tmp__
 mkdir __tmp__
 cd __tmp__
 
-gonc -d generate > key
+gogen key -l 64 > key
 
 KEY=$(cat key)
 

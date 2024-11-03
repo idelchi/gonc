@@ -16,7 +16,7 @@ type Suffixes struct {
 }
 
 type Key struct {
-	String string `mask:"fixed" validate:"hexadecimal,len=64,exclusive=File" mapstructure:"key" label:"--key"`
+	String string `mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File" mapstructure:"key" label:"--key"`
 	File   string `validate:"exclusive=String" mapstructure:"key-file" label:"--key-file"`
 }
 
