@@ -24,5 +24,7 @@ func NewEncryptCommand(cfg *config.Config) *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolP("deterministic", "d", false, "Use deterministic encryption mode")
+
 	return cmd
 }

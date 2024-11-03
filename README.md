@@ -34,7 +34,7 @@ Flags:
   -j, --parallel int          Number of parallel workers (defaults to the number of CPUs)
       --decrypt-ext string    Suffix to append to decrypted files, after stripping the encrypted suffix (default "")
       --encrypt-ext string    Suffix to append to encrypted files (default ".enc")
-  -d, --deterministic         Use deterministic encryption mode. Valid for "generate" and "encrypt" commands
+  -d, --deterministic         Use deterministic encryption mode. Valid for "encrypt" command
   -h, --help                  help for gonc
   -v, --version               version for gonc
 ```
