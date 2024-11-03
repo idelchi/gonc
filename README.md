@@ -21,13 +21,13 @@ curl -sSL https://raw.githubusercontent.com/idelchi/gonc/refs/heads/dev/install.
 
 ## Usage
 
-```sh
+```text
 gonc [flags] <command> [flags] [paths...]
 ```
 
 Run `gonc` with the desired flags. The available flags include:
 
-```sh
+```text
 Flags:
   -k, --key string            Encryption key (32/64 bytes, hex-encoded)
   -f, --key-file string       Path to a file containing the encryption key (32/64 bytes, hex-encoded)
@@ -41,7 +41,7 @@ Flags:
 
 The utility supports the following commands:
 
-```sh
+```text
 Available Commands:
   encrypt       Encrypt files (aliases: enc)
   decrypt       Decrypt files (aliases: dec)
