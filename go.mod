@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/idelchi/godyl v0.0.0-20241029091045-af98851a0cee
-	github.com/idelchi/gogen v0.0.1
+	github.com/idelchi/gogen v0.0.0-20241105121434-33bff46b48cb
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	github.com/tink-crypto/tink-go/v2 v2.2.0

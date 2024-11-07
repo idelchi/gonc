@@ -5,14 +5,15 @@
 [![Build Status](https://github.com/idelchi/gonc/actions/workflows/github-actions.yml/badge.svg)](https://github.com/idelchi/gonc/actions/workflows/github-actions.yml/badge.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-`gonc` is a simple command-line utility that provides secure file encryption, with support for deterministic and non-deterministic modes.
+`gonc` is a simple command-line utility that provides secure file encryption,
+with support for deterministic and non-deterministic modes.
 
 ## Installation
 
 ### From source
 
 ```sh
-go install github.com/idelchi/gonc/cmd/gonc@latest
+go install github.com/idelchi/gonc@latest
 ```
 
 ### From installation script

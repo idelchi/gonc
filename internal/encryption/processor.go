@@ -9,9 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/tink-crypto/tink-go/v2/daead"
 	"github.com/tink-crypto/tink-go/v2/tink"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/idelchi/gogen/pkg/key"
 	"github.com/idelchi/gonc/internal/config"
@@ -21,12 +22,16 @@ import (
 type Processor struct {
 	// cfg contains runtime configuration options
 	cfg *config.Config
+
 	// cipher holds the AES block cipher for CBC mode
 	cipher cipher.Block
+
 	// daead provides deterministic authenticated encryption
 	daead tink.DeterministicAEAD
+
 	// key stores raw key bytes for deferred cipher initialization
 	key []byte
+
 	// results channels processing outcomes to the printer goroutine
 	results chan Result
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/idelchi/gogen/pkg/cobraext"
 	"github.com/idelchi/gonc/internal/config"
 	"github.com/idelchi/gonc/internal/logic"
 )
@@ -20,7 +21,7 @@ func NewDecryptCommand(cfg *config.Config) *cobra.Command {
 			cfg.Files = args
 			cfg.Decrypt = true
 
-			return validate(cfg, cfg)
+			return cobraext.Validate(cfg, &cfg)
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if err := logic.Run(cfg); err != nil {

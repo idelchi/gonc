@@ -3,6 +3,7 @@ package commands
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/idelchi/gogen/pkg/cobraext"
 	"github.com/idelchi/gonc/internal/config"
 	"github.com/idelchi/gonc/internal/logic"
 )
@@ -17,7 +18,7 @@ func NewEncryptCommand(cfg *config.Config) *cobra.Command {
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			cfg.Files = args
 
-			return validate(cfg, cfg)
+			return cobraext.Validate(cfg, &cfg)
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return logic.Run(cfg)

@@ -12,10 +12,13 @@ import (
 type streamingWriter struct {
 	// w is the underlying writer for encrypted data
 	w io.Writer
+
 	// daead handles deterministic authenticated encryption
 	daead tink.DeterministicAEAD
+
 	// buffer accumulates data until it reaches chunk size
 	buffer []byte
+
 	// associatedData is authenticated but not encrypted
 	associatedData []byte
 }
