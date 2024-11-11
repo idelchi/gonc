@@ -9,8 +9,6 @@ for arg in "$@"; do
   fi
 done
 
-curl ${DISABLE_SSL:+-k} -sSL https://raw.githubusercontent.com/idelchi/scripts/refs/heads/dev/install.sh | INSTALLER_TOOL="gogen" sh -s -- "$@"
-
 # Arguments passed by calling script
 TOOL=${INSTALLER_TOOL:-"example"}
 OWNER=${INSTALLER_OWNER:-"idelchi"}
