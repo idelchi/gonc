@@ -36,6 +36,8 @@ jobs:
           - windows-2022
           - macos-14
     runs-on: ${{ matrix.os }}
+    env:
+      GOGEN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +49,9 @@ jobs:
       - name: Test
         shell: sh
         run: |
+          export PATH=~/.local/bin:$PATH
+          echo "Added '~/.local/bin' to PATH"
+          curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin
           ./tests/gonc.sh
 
   next-tag:
