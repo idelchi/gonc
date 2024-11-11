@@ -1,0 +1,5 @@
+[default.extend-words]
+encrypter = "encrypter"
+
+[files]
+extend-exclude = ["tests/file.txt"]

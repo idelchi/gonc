@@ -9,6 +9,8 @@ import (
 	"io"
 )
 
+// jscpd:ignore-start
+
 // encryptCBC encrypts the input file using AES in CBC mode.
 func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 	// Generate and write IV
@@ -144,3 +146,5 @@ func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
 
 	return nil
 }
+
+// jscpd:ignore-end

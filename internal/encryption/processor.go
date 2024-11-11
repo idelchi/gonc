@@ -134,7 +134,9 @@ func (p *Processor) ProcessFiles() error {
 			if result.Error != nil {
 				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error)
 			} else {
-				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output)
+				if !p.cfg.Quiet {
+					fmt.Printf("Processed %q -> %q\n", result.Input, result.Output)
+				}
 			}
 		}
 	}()

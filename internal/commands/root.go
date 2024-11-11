@@ -21,6 +21,7 @@ Provides commands for key generation, encryption, and decryption.`
 
 	root.Flags().BoolP("show", "s", false, "Show the configuration and exit")
 	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers, defaults to number of CPUs")
+	root.Flags().BoolP("quiet", "q", false, "Suppress non-error output")
 
 	root.Flags().StringP("key", "k", "", "Encryption key (64 or 32 bytes, hex-encoded)")
 	root.Flags().

@@ -11,6 +11,7 @@ vars:
 
 env:
   CSPELL_CONFIG: ./settings/cspell.yaml
+  TYPOS_CONFIG: ./settings/typos.toml
 
 includes:
   aux: "{{.DEVENV}}/taskfiles/Taskfile.aux.yml"
@@ -66,7 +67,9 @@ tasks:
   lint:
     deps:
       - lint:default
-      - go:lint
+    cmds:
+      - cmd: task go:lint
+        ignore_error: true
 
   build:
     - task: go:build

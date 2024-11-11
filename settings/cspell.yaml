@@ -1,0 +1,6 @@
+dictionaries:
+  - gocry-words
+
+dictionaryDefinitions:
+  - name: gocry-words
+    path: project-words

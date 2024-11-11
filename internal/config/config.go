@@ -33,6 +33,9 @@ type Config struct {
 	// Show the configuration and exit
 	Show bool
 
+	// Quiet mode
+	Quiet bool
+
 	// Number of files to process in parallel
 	Parallel int
 
