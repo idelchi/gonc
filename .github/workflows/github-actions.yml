@@ -37,7 +37,7 @@ jobs:
           - macos-14
     runs-on: ${{ matrix.os }}
     env:
-      GOGEN_GITHUB_TOKEN: ass
+      GOGEN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
