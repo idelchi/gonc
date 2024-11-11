@@ -47,7 +47,7 @@ jobs:
       - name: Test
         shell: sh
         run: |
-          curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin
+          curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin -x
           ./tests/gonc.sh
 
   # next-tag:
