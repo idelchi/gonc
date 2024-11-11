@@ -38,6 +38,7 @@ gonc [flags] command [flags] [paths...]
 | `--decrypt-ext`       | `GONC_DECRYPT_EXT`   | Suffix for decrypted files   | `""`      | -               |
 | `--encrypt-ext`       | `GONC_ENCRYPT_EXT`   | Suffix for encrypted files   | `.enc`    | -               |
 | `-d, --deterministic` | `GONC_DETERMINISTIC` | Use deterministic encryption | `false`   | -               |
+| `-q, --quiet`         | `GONC_QUIET`         | Suppress output              | `false`   | -               |
 | `-h, --help`          | -                    | Help for gonc                | -         | -               |
 | `-v, --version`       | -                    | Version for gonc             | -         | -               |
 
