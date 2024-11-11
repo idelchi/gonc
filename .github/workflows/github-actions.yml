@@ -52,6 +52,7 @@ jobs:
           export PATH=$HOME/.local/bin:$PATH
           echo "Added $HOME/.local/bin to PATH"
           # ./tests/gonc.sh
+          curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin -x
 
   # next-tag:
   #   uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
