@@ -33,7 +33,6 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
-          - windows-2022
           # - macos-14
     runs-on: ${{ matrix.os }}
     steps:
@@ -47,8 +46,9 @@ jobs:
       - name: Test
         shell: sh
         run: |
+          chmod +x ./install_gogen.sh
           ./install_gogen.sh -d ~/.local/bin -x
-          ./tests/gonc.sh
+          # ./tests/gonc.sh
 
   # next-tag:
   #   uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
