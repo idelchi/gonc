@@ -21,7 +21,7 @@ func NewDecryptCommand(cfg *config.Config) *cobra.Command {
 			cfg.Files = args
 			cfg.Decrypt = true
 
-			return cobraext.Validate(cfg, &cfg)
+			return cobraext.Validate(cfg, cfg)
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if err := logic.Run(cfg); err != nil {

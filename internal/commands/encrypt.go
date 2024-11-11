@@ -18,7 +18,7 @@ func NewEncryptCommand(cfg *config.Config) *cobra.Command {
 		PreRunE: func(_ *cobra.Command, args []string) error {
 			cfg.Files = args
 
-			return cobraext.Validate(cfg, &cfg)
+			return cobraext.Validate(cfg, cfg)
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return logic.Run(cfg)
