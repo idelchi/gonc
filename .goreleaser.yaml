@@ -8,9 +8,7 @@ before:
     - go mod tidy
 
 builds:
-  - main: ./cmd/gonc
-
-    env:
+  - env:
       - CGO_ENABLED=0
 
     goos:

@@ -1,38 +1,83 @@
 package config
 
 import (
-	"encoding/hex"
+	"errors"
 	"fmt"
 
-	"github.com/go-playground/validator/v10"
+	"github.com/idelchi/gogen/pkg/validator"
 )
 
-type Config struct {
-	// Common flags
-	Key           string `validate:"required,len=64"` // hex encoded, so 32 bytes = 64 chars
-	Parallel      int
-	EncryptSuffix string `mapstructure:"encrypt-ext"`
-	DecryptSuffix string `mapstructure:"decrypt-ext"`
+// ErrUsage indicates an error in command-line usage or configuration.
+var ErrUsage = errors.New("usage error")
 
-	// Command-specific flags
-	Deterministic bool
-	Decrypt       bool
+// Suffixes contains the file suffixes for encrypted and decrypted files.
+type Suffixes struct {
+	// Suffix for encrypted files
+	Encrypt string `mapstructure:"encrypt-ext"`
 
-	// Positional arguments
-	Files []string `validate:"min=1"`
+	// Suffix for decrypted files
+	Decrypt string `mapstructure:"decrypt-ext"`
 }
 
-// Validate validates the configuration against the struct tags
-func (c Config) Validate() error {
-	validate := validator.New()
+// Key contains the encryption key.
+type Key struct {
+	// Key in hexadecimal format
+	String string `label:"--key" mapstructure:"key" mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File"`
 
-	if err := validate.Struct(c); err != nil {
-		return fmt.Errorf("validating configuration: %w", err)
+	// Key in a file
+	File string `label:"--key-file" mapstructure:"key-file" validate:"exclusive=String"`
+}
+
+// Config contains the application configuration.
+type Config struct {
+	// Show the configuration and exit
+	Show bool
+
+	// Quiet mode
+	Quiet bool
+
+	// Number of files to process in parallel
+	Parallel int
+
+	// Key holds the encryption key as a string or a file
+	Key Key `mapstructure:",squash"`
+
+	// Suffixes for encrypted and decrypted files
+	Suffixes Suffixes `mapstructure:",squash"`
+
+	// Encryption mode
+	Deterministic bool
+
+	// Decrypt files
+	Decrypt bool `mapstructure:"-"`
+
+	// Files to process
+	Files []string `validate:"required"`
+}
+
+// Display returns the value of the Show field.
+func (c Config) Display() bool {
+	return c.Show
+}
+
+// Validate performs configuration validation using the validator package.
+// It returns a wrapped ErrUsage if any validation rules are violated.
+func (c Config) Validate(config any) error {
+	validator := validator.NewValidator()
+
+	if err := registerExclusive(validator); err != nil {
+		return fmt.Errorf("registering exclusive: %w", err)
 	}
 
-	// Additional key validation
-	if _, err := hex.DecodeString(c.Key); err != nil {
-		return fmt.Errorf("invalid key format: %w", err)
+	errs := validator.Validate(config)
+
+	switch {
+	case errs == nil:
+		return nil
+	case len(errs) == 1:
+		return fmt.Errorf("%w: %w", ErrUsage, errs[0])
+	case len(errs) > 1:
+		return fmt.Errorf("%ws:\n%w", ErrUsage, errors.Join(errs...))
 	}
 
 	return nil
