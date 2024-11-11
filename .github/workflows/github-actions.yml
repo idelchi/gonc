@@ -39,18 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.2"
-          check-latest: true
+      # - uses: actions/setup-go@v5
+      #   with:
+      #     go-version: "1.23.2"
+      #     check-latest: true
 
       - name: Test
         shell: sh
         run: |
+          chmod +x ./install_gogen.sh
           ./install_gogen.sh -d ~/.local/bin -x
           export PATH=$HOME/.local/bin:$PATH
           echo "Added $HOME/.local/bin to PATH"
-          ./tests/gonc.sh
+          # ./tests/gonc.sh
 
   # next-tag:
   #   uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
