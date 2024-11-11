@@ -12,6 +12,8 @@ import (
 // jscpd:ignore-start
 
 // encryptCBC encrypts the input file using AES in CBC mode.
+//
+//nolint:funlen
 func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 	// Generate and write IV
 	iv := make([]byte, aes.BlockSize)

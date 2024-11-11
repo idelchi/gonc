@@ -1,3 +1,4 @@
+// Package logic implements the core business logic for the encryption/decryption.
 package logic
 
 import (

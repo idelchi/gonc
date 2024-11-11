@@ -1,4 +1,14 @@
-// Command gonc ...
+// Command gonc provides secure file encryption with support for deterministic
+// and non-deterministic modes. It offers parallel processing capabilities and
+// configurable file extensions for encrypted/decrypted outputs.
+//
+// Basic usage:
+//
+//	gonc [flags] command [flags] [paths...]
+//
+// The encryption key can be provided via command line flag or environment variable
+// in hex-encoded format (32 or 64 bytes). Files can be encrypted with either
+// standard (non-deterministic) or deterministic mode.
 package main
 
 import (
