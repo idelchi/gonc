@@ -11,24 +11,24 @@ on:
       - "*"
 
 jobs:
-  # info:
-  #   uses: idelchi/devenv/.github/workflows/info.yml@dev
+  info:
+    uses: idelchi/devenv/.github/workflows/info.yml@dev
 
-  # cleanup:
-  #   uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
-  #   if: github.ref == 'refs/heads/dev'
-  #   needs: info
-  #   permissions:
-  #     actions: write
+  cleanup:
+    uses: idelchi/devenv/.github/workflows/cleanup.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: info
+    permissions:
+      actions: write
 
-  # verify:
-  #   if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-  #   uses: idelchi/devenv/.github/workflows/task.yml@dev
-  #   needs: info
+  verify:
+    if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
+    uses: idelchi/devenv/.github/workflows/task.yml@dev
+    needs: info
 
   test:
     if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
-    # needs: verify
+    needs: verify
     strategy:
       matrix:
         os:
@@ -54,24 +54,24 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin
           ./tests/gonc.sh
 
-  # next-tag:
-  #   uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
-  #   if: github.ref == 'refs/heads/dev'
-  #   needs: verify
+  next-tag:
+    uses: idelchi/devenv/.github/workflows/next-tag.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: verify
 
-  # prerelease:
-  #   uses: idelchi/devenv/.github/workflows/prerelease.yml@dev
-  #   if: github.ref == 'refs/heads/dev'
-  #   needs: next-tag
-  #   permissions:
-  #     contents: write
-  #     actions: write
-  #   with:
-  #     tag: ${{ needs.next-tag.outputs.next }}-beta
+  prerelease:
+    uses: idelchi/devenv/.github/workflows/prerelease.yml@dev
+    if: github.ref == 'refs/heads/dev'
+    needs: next-tag
+    permissions:
+      contents: write
+      actions: write
+    with:
+      tag: ${{ needs.next-tag.outputs.next }}-beta
 
-  # release:
-  #   uses: idelchi/devenv/.github/workflows/gorelease.yml@dev
-  #   if: startsWith(github.ref, 'refs/tags/')
-  #   needs: info
-  #   permissions:
-  #     contents: write
+  release:
+    uses: idelchi/devenv/.github/workflows/gorelease.yml@dev
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: info
+    permissions:
+      contents: write
