@@ -9,6 +9,8 @@ for arg in "$@"; do
   fi
 done
 
+INSTALLER_TOOL="gogen"
+
 # Arguments passed by calling script
 TOOL=${INSTALLER_TOOL:-"example"}
 OWNER=${INSTALLER_OWNER:-"idelchi"}
