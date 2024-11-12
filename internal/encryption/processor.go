@@ -126,6 +126,8 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
+//
+//nolint:cyclop
 func (p *Processor) ProcessFiles() error {
 	group := errgroup.Group{}
 	group.SetLimit(p.cfg.Parallel)
