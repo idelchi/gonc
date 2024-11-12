@@ -67,9 +67,7 @@ tasks:
   lint:
     deps:
       - lint:default
-    cmds:
-      - cmd: task go:lint
-        ignore_error: true
+      - go:lint
 
   build:
     - task: go:build

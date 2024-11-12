@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 )
@@ -13,24 +14,31 @@ import (
 
 // encryptCBC encrypts the input file using AES in CBC mode.
 //
-//nolint:funlen
-func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
+//nolint:funlen,cyclop
+func (p *Processor) encryptCBC(reader io.Reader, writer io.Writer) error {
 	// Generate and write IV
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+	initializationVector := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(rand.Reader, initializationVector); err != nil {
 		return fmt.Errorf("generating IV: %w", err)
 	}
-	if _, err := w.Write(iv); err != nil {
+
+	if _, err := writer.Write(initializationVector); err != nil {
 		return fmt.Errorf("writing IV: %w", err)
 	}
 
-	cbcMode := cipher.NewCBCEncrypter(p.cipher, iv)
-	bufReader := bufio.NewReaderSize(r, defaultBufferSize)
+	cbcMode := cipher.NewCBCEncrypter(p.cipher, initializationVector)
+	bufReader := bufio.NewReaderSize(reader, defaultBufferSize)
 
-	buf := bufferPool.Get().([]byte)
-	defer bufferPool.Put(buf)
+	buf, ok := bufferPool.Get().([]byte)
+	if !ok {
+		return errors.New("invalid buffer type from pool") //nolint:err113
+	}
 
-	blockBuf := make([]byte, 0, 2*aes.BlockSize)
+	defer bufferPool.Put(buf) //nolint:staticcheck
+
+	const twoBlocks = 2 * aes.BlockSize
+
+	blockBuf := make([]byte, 0, twoBlocks)
 	isEOF := false
 
 	// Process the file in chunks
@@ -40,6 +48,7 @@ func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 		if n > 0 {
 			blockBuf = append(blockBuf, buf[:n]...)
 		}
+
 		if err == io.EOF {
 			isEOF = true
 		} else if err != nil {
@@ -56,7 +65,7 @@ func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 			ciphertext := make([]byte, aes.BlockSize)
 			cbcMode.CryptBlocks(ciphertext, blockBuf[:aes.BlockSize])
 
-			if _, err := w.Write(ciphertext); err != nil {
+			if _, err := writer.Write(ciphertext); err != nil {
 				return fmt.Errorf("writing encrypted block: %w", err)
 			}
 
@@ -70,9 +79,10 @@ func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 			ciphertext := make([]byte, len(padded))
 			cbcMode.CryptBlocks(ciphertext, padded)
 
-			if _, err := w.Write(ciphertext); err != nil {
+			if _, err := writer.Write(ciphertext); err != nil {
 				return fmt.Errorf("writing final encrypted block: %w", err)
 			}
+
 			break
 		}
 	}
@@ -81,21 +91,30 @@ func (p *Processor) encryptCBC(r io.Reader, w io.Writer) error {
 }
 
 // decryptCBC decrypts the input file using AES in CBC mode.
-func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
+//
+//nolint:funlen,cyclop
+func (p *Processor) decryptCBC(reader io.Reader, writer io.Writer) error {
 	// Read IV
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(r, iv); err != nil {
+	initializationVector := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(reader, initializationVector); err != nil {
 		return fmt.Errorf("reading IV: %w", err)
 	}
 
-	cbcMode := cipher.NewCBCDecrypter(p.cipher, iv)
-	bufReader := bufio.NewReaderSize(r, defaultBufferSize)
+	cbcMode := cipher.NewCBCDecrypter(p.cipher, initializationVector)
+	bufReader := bufio.NewReaderSize(reader, defaultBufferSize)
 
-	buf := bufferPool.Get().([]byte)
-	defer bufferPool.Put(buf)
+	buf, ok := bufferPool.Get().([]byte)
+	if !ok {
+		return errors.New("invalid buffer type from pool") //nolint:err113
+	}
+
+	defer bufferPool.Put(buf) //nolint:staticcheck
 
 	var lastBlock []byte
-	blockBuf := make([]byte, 0, 2*aes.BlockSize)
+
+	const twoBlocks = 2 * aes.BlockSize
+
+	blockBuf := make([]byte, 0, twoBlocks)
 	isEOF := false
 
 	// Process the file in chunks
@@ -105,6 +124,7 @@ func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
 		if n > 0 {
 			blockBuf = append(blockBuf, buf[:n]...)
 		}
+
 		if err == io.EOF {
 			isEOF = true
 		} else if err != nil {
@@ -121,7 +141,7 @@ func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
 			plaintext := make([]byte, aes.BlockSize)
 			cbcMode.CryptBlocks(plaintext, blockBuf[:aes.BlockSize])
 
-			if _, err := w.Write(plaintext); err != nil {
+			if _, err := writer.Write(plaintext); err != nil {
 				return fmt.Errorf("writing decrypted block: %w", err)
 			}
 
@@ -139,9 +159,10 @@ func (p *Processor) decryptCBC(r io.Reader, w io.Writer) error {
 				return fmt.Errorf("removing padding: %w", err)
 			}
 
-			if _, err := w.Write(unpadded); err != nil {
+			if _, err := writer.Write(unpadded); err != nil {
 				return fmt.Errorf("writing final decrypted block: %w", err)
 			}
+
 			break
 		}
 	}
