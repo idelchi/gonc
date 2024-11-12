@@ -141,6 +141,16 @@ func (p *Processor) ProcessFiles() error {
 			} else if !p.cfg.Quiet {
 				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint:forbidigo
 			}
+
+			if p.cfg.Delete && result.Error == nil {
+				if err := os.Remove(result.Input); err != nil {
+					fmt.Fprintf(os.Stderr, "Error deleting %q: %v\n", result.Input, err)
+				}
+
+				if !p.cfg.Quiet {
+					fmt.Printf("Deleted %q\n", result.Input) //nolint:forbidigo
+				}
+			}
 		}
 	}()
 

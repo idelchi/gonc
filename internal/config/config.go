@@ -36,6 +36,9 @@ type Config struct {
 	// Quiet mode
 	Quiet bool
 
+	// Delete the original file after successful encryption/decryption
+	Delete bool
+
 	// Number of files to process in parallel
 	Parallel int
 
