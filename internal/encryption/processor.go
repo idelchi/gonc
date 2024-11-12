@@ -126,6 +126,8 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
+//
+//nolint:cyclop
 func (p *Processor) ProcessFiles() error {
 	group := errgroup.Group{}
 	group.SetLimit(p.cfg.Parallel)
@@ -140,6 +142,16 @@ func (p *Processor) ProcessFiles() error {
 				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error)
 			} else if !p.cfg.Quiet {
 				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint:forbidigo
+			}
+
+			if p.cfg.Delete && result.Error == nil {
+				if err := os.Remove(result.Input); err != nil {
+					fmt.Fprintf(os.Stderr, "Error deleting %q: %v\n", result.Input, err)
+				}
+
+				if !p.cfg.Quiet {
+					fmt.Printf("Deleted %q\n", result.Input) //nolint:forbidigo
+				}
 			}
 		}
 	}()
