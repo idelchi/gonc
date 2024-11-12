@@ -57,7 +57,7 @@ jobs:
   next-tag:
     uses: idelchi/devenv/.github/workflows/next-tag.yml@main
     if: github.ref == 'refs/heads/dev'
-    needs: verify
+    needs: test
 
   prerelease:
     uses: idelchi/devenv/.github/workflows/prerelease.yml@main

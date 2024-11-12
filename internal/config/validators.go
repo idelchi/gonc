@@ -52,6 +52,7 @@ func validateExclusive(fl validator.FieldLevel) bool {
 	if field.Kind() == reflect.String && otherField.Kind() == reflect.String {
 		currentValue := field.String()
 		otherValue := otherField.String()
+
 		return !(currentValue != "" && otherValue != "")
 	}
 

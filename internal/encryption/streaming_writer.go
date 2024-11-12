@@ -2,8 +2,10 @@ package encryption
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/tink-crypto/tink-go/v2/tink"
 )
@@ -34,8 +36,8 @@ func newStreamingWriter(w io.Writer, daead tink.DeterministicAEAD, associatedDat
 }
 
 // Write implements io.Writer, buffering data until a complete chunk can be encrypted.
-func (sw *streamingWriter) Write(p []byte) (int, error) {
-	sw.buffer = append(sw.buffer, p...)
+func (sw *streamingWriter) Write(data []byte) (int, error) {
+	sw.buffer = append(sw.buffer, data...)
 
 	for len(sw.buffer) >= chunkSize {
 		if err := sw.flushChunk(chunkSize); err != nil {
@@ -43,7 +45,7 @@ func (sw *streamingWriter) Write(p []byte) (int, error) {
 		}
 	}
 
-	return len(p), nil
+	return len(data), nil
 }
 
 // Close implements io.Closer, encrypting any remaining buffered data.
@@ -51,18 +53,25 @@ func (sw *streamingWriter) Close() error {
 	if len(sw.buffer) > 0 {
 		return sw.flushChunk(len(sw.buffer))
 	}
+
 	return nil
 }
 
 // flushChunk encrypts and writes a chunk of the specified size.
 func (sw *streamingWriter) flushChunk(size int) error {
 	chunk := sw.buffer[:size]
+
 	encrypted, err := sw.daead.EncryptDeterministically(chunk, sw.associatedData)
 	if err != nil {
 		return fmt.Errorf("encrypting chunk: %w", err)
 	}
 
-	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil {
+	encryptedLen := len(encrypted)
+	if encryptedLen < 0 || encryptedLen > math.MaxUint32 {
+		return errors.New("encrypted chunk size exceeds maximum uint32 value") //nolint:err113
+	}
+
+	if err := binary.Write(sw.w, binary.BigEndian, uint32(encryptedLen)); err != nil {
 		return fmt.Errorf("writing chunk size: %w", err)
 	}
 
@@ -71,5 +80,6 @@ func (sw *streamingWriter) flushChunk(size int) error {
 	}
 
 	sw.buffer = sw.buffer[size:]
+
 	return nil
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 
@@ -17,23 +18,29 @@ import (
 
 // encryptDeterministic encrypts the input file using deterministic encryption.
 // It streams data through a deterministic AEAD writer for memory efficiency.
-func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
-	sw := newStreamingWriter(w, p.daead, nil)
-	defer sw.Close()
+func (p *Processor) encryptDeterministic(reader io.Reader, writer io.Writer) error {
+	streamingWriter := newStreamingWriter(writer, p.daead, nil)
+	defer streamingWriter.Close()
 
-	buf := bufferPool.Get().([]byte)
-	defer bufferPool.Put(buf)
+	buf, ok := bufferPool.Get().([]byte)
+	if !ok {
+		return errors.New("invalid buffer type from pool") //nolint:err113
+	}
+
+	defer bufferPool.Put(buf) //nolint:staticcheck
 
 	for {
-		n, err := r.Read(buf)
+		n, err := reader.Read(buf)
 		if n > 0 {
-			if _, err := sw.Write(buf[:n]); err != nil {
+			if _, err := streamingWriter.Write(buf[:n]); err != nil {
 				return fmt.Errorf("writing to stream: %w", err)
 			}
 		}
+
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return fmt.Errorf("reading input: %w", err)
 		}
@@ -44,22 +51,23 @@ func (p *Processor) encryptDeterministic(r io.Reader, w io.Writer) error {
 
 // decryptDeterministic decrypts the input file using deterministic encryption.
 // It reads and processes encrypted chunks sequentially.
-func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
-	br := bufio.NewReader(r)
+func (p *Processor) decryptDeterministic(reader io.Reader, writer io.Writer) error {
+	bufReader := bufio.NewReader(reader)
 
 	for {
 		// Read chunk size
 		var chunkSize uint32
-		if err := binary.Read(br, binary.BigEndian, &chunkSize); err != nil {
-			if err == io.EOF {
+		if err := binary.Read(bufReader, binary.BigEndian, &chunkSize); err != nil {
+			if errors.Is(err, io.EOF) {
 				break
 			}
+
 			return fmt.Errorf("reading chunk size: %w", err)
 		}
 
 		// Read encrypted chunk
 		encrypted := make([]byte, chunkSize)
-		if _, err := io.ReadFull(br, encrypted); err != nil {
+		if _, err := io.ReadFull(bufReader, encrypted); err != nil {
 			return fmt.Errorf("reading encrypted chunk: %w", err)
 		}
 
@@ -70,7 +78,7 @@ func (p *Processor) decryptDeterministic(r io.Reader, w io.Writer) error {
 		}
 
 		// Write decrypted chunk
-		if _, err := w.Write(decrypted); err != nil {
+		if _, err := writer.Write(decrypted); err != nil {
 			return fmt.Errorf("writing decrypted chunk: %w", err)
 		}
 	}
@@ -99,7 +107,7 @@ func newDeterministicAEADKeyHandle(key []byte) (*keyset.Handle, error) {
 	}
 
 	// Create a Keyset containing the key
-	ks := &tinkpb.Keyset{
+	keySet := &tinkpb.Keyset{
 		PrimaryKeyId: 1,
 		Key: []*tinkpb.Keyset_Key{
 			{
@@ -112,17 +120,17 @@ func newDeterministicAEADKeyHandle(key []byte) (*keyset.Handle, error) {
 	}
 
 	// Serialize the Keyset
-	serializedKeyset, err := proto.Marshal(ks)
+	serializedKeyset, err := proto.Marshal(keySet)
 	if err != nil {
 		return nil, fmt.Errorf("serializing keyset: %w", err)
 	}
 
 	// Use insecurecleartextkeyset.Read with keyset.NewBinaryReader
-	kh, err := insecurecleartextkeyset.Read(
+	keySetHandle, err := insecurecleartextkeyset.Read(
 		keyset.NewBinaryReader(bytes.NewReader(serializedKeyset)))
 	if err != nil {
 		return nil, fmt.Errorf("creating keyset handle: %w", err)
 	}
 
-	return kh, nil
+	return keySetHandle, nil
 }

@@ -10,6 +10,7 @@ import (
 func pkcs7Pad(data []byte, blockSize int) []byte {
 	padding := blockSize - len(data)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
+
 	return append(data, padText...)
 }
 
@@ -23,7 +24,7 @@ func pkcs7Unpad(data []byte) ([]byte, error) {
 
 	padding := int(data[length-1])
 	if padding > length || padding > aes.BlockSize {
-		return nil, fmt.Errorf("invalid padding size: %d", padding)
+		return nil, fmt.Errorf("invalid padding size: %d", padding) //nolint:err113
 	}
 
 	// Verify padding

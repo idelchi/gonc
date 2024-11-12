@@ -1,3 +1,4 @@
+// Package logic implements the core business logic for the encryption/decryption.
 package logic
 
 import (
@@ -16,7 +17,7 @@ func Run(cfg *config.Config) error {
 
 	err = proc.ProcessFiles()
 	if err != nil {
-		return fmt.Errorf("processing files: %w", err)
+		return fmt.Errorf("running logic: %w", err)
 	}
 
 	return nil

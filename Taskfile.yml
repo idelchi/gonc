@@ -39,7 +39,7 @@ tasks:
     cmds:
       - docker rm -f devenv > /dev/null 2>&1 || true
       - docker compose -f {{.DEVENV}}/docker-compose.yml build --build-arg CACHEBUST=$(date +%s) devenv
-      - docker compose -f {{.DEVENV}}/docker-compose.yml run --rm --service-ports devenv {{.CLI_ARGS}}
+      - docker compose -f {{.DEVENV}}/docker-compose.yml run --rm devenv {{.CLI_ARGS}}
     interactive: true
 
   push:
@@ -67,9 +67,7 @@ tasks:
   lint:
     deps:
       - lint:default
-    cmds:
-      - cmd: task go:lint
-        ignore_error: true
+      - go:lint
 
   build:
     - task: go:build
