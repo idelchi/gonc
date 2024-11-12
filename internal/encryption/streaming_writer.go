@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/tink-crypto/tink-go/v2/tink"
 )
@@ -57,6 +56,9 @@ func (sw *streamingWriter) Close() error {
 	return nil
 }
 
+// maxChunkSize is the maximum size of an encrypted chunk.
+const maxChunkSize = 1<<32 - 1 // This is uint32 max as a typed constant
+
 // flushChunk encrypts and writes a chunk of the specified size.
 func (sw *streamingWriter) flushChunk(size int) error {
 	chunk := sw.buffer[:size]
@@ -67,8 +69,8 @@ func (sw *streamingWriter) flushChunk(size int) error {
 	}
 
 	encryptedLen := len(encrypted)
-	if encryptedLen < 0 || encryptedLen > math.MaxUint32 {
-		return errors.New("encrypted chunk size exceeds maximum uint32 value") //nolint:err113
+	if encryptedLen < 0 || uint64(encryptedLen) > maxChunkSize {
+		return errors.New("encrypted chunk size exceeds maximum uint32 value")
 	}
 
 	if err := binary.Write(sw.w, binary.BigEndian, uint32(encryptedLen)); err != nil {
