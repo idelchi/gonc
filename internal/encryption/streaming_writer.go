@@ -56,11 +56,13 @@ func (sw *streamingWriter) Close() error {
 	return nil
 }
 
-// maxChunkSize is the maximum size of an encrypted chunk.
-const maxChunkSize = 1<<32 - 1 // This is uint32 max as a typed constant
-
 // flushChunk encrypts and writes a chunk of the specified size.
 func (sw *streamingWriter) flushChunk(size int) error {
+	// Our chunks are limited to 1MB by design
+	if size > chunkSize {
+		return errors.New("chunk size exceeds maximum allowed size") //nolint:err113
+	}
+
 	chunk := sw.buffer[:size]
 
 	encrypted, err := sw.daead.EncryptDeterministically(chunk, sw.associatedData)
@@ -68,12 +70,9 @@ func (sw *streamingWriter) flushChunk(size int) error {
 		return fmt.Errorf("encrypting chunk: %w", err)
 	}
 
-	encryptedLen := len(encrypted)
-	if encryptedLen < 0 || uint64(encryptedLen) > maxChunkSize {
-		return errors.New("encrypted chunk size exceeds maximum uint32 value")
-	}
-
-	if err := binary.Write(sw.w, binary.BigEndian, uint32(encryptedLen)); err != nil {
+	// Even with AEAD overhead, encrypted size will be safe for uint32
+	//nolint:gosec	 // G115: Our chunks are limited to 1MB by design, uint32 overflow impossible
+	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil {
 		return fmt.Errorf("writing chunk size: %w", err)
 	}
 
