@@ -7,7 +7,7 @@ dotenv: ["taskfile.env"]
 
 vars:
   # This environment variable must exist (i.e it's not enough that it's set in the .env file)
-  DEVENV: $DEVENV
+  DEVENV: .devenv
 
 env:
   CSPELL_CONFIG: ./settings/cspell.yaml
