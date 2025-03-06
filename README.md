@@ -19,7 +19,7 @@ go install github.com/idelchi/gonc@latest
 ### From installation script
 
 ```sh
-curl -sSL https://raw.githubusercontent.com/idelchi/gonc/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin
+curl -sSL https://raw.githubusercontent.com/idelchi/gonc/refs/heads/main/install.sh | sh -s -- -d ~/.local/bin
 ```
 
 ## Usage
