@@ -30,17 +30,18 @@ gonc [flags] command [flags] [paths...]
 
 ### Global Flags and Environment Variables
 
-| Flag                  | Environment Variable | Description                  | Default   | Valid Values    |
-| --------------------- | -------------------- | ---------------------------- | --------- | --------------- |
-| `-k, --key`           | `GONC_KEY`           | Encryption key (hex-encoded) | -         | 32/64 bytes     |
-| `-f, --key-file`      | `GONC_KEY_FILE`      | Path to encryption key file  | -         | 32/64 bytes key |
-| `-j, --parallel`      | `GONC_PARALLEL`      | Number of parallel workers   | CPU count | > 0             |
-| `--decrypt-ext`       | `GONC_DECRYPT_EXT`   | Suffix for decrypted files   | `""`      | -               |
-| `--encrypt-ext`       | `GONC_ENCRYPT_EXT`   | Suffix for encrypted files   | `.enc`    | -               |
-| `-d, --deterministic` | `GONC_DETERMINISTIC` | Use deterministic encryption | `false`   | -               |
-| `-q, --quiet`         | `GONC_QUIET`         | Suppress output              | `false`   | -               |
-| `-h, --help`          | -                    | Help for gonc                | -         | -               |
-| `-v, --version`       | -                    | Version for gonc             | -         | -               |
+| Flag             | Environment Variable | Description                            | Default   | Valid Values    |
+| ---------------- | -------------------- | -------------------------------------- | --------- | --------------- |
+| `-s, --show`     | -                    | Show the configuration and exit        | -         | -               |
+| `-j, --parallel` | `GONC_PARALLEL`      | Number of parallel workers             | CPU count | > 0             |
+| `-q, --quiet`    | `GONC_QUIET`         | Suppress output                        | `false`   | -               |
+| `-d, --delete`   | `GONC_DELETE`        | Delete original files after encryption | `false`   | -               |
+| `-k, --key`      | `GONC_KEY`           | Encryption key (hex-encoded)           | -         | 32/64 bytes     |
+| `-f, --key-file` | `GONC_KEY_FILE`      | Path to encryption key file            | -         | 32/64 bytes key |
+| `--encrypt-ext`  | `GONC_ENCRYPT_EXT`   | Suffix for encrypted files             | `.enc`    | -               |
+| `--decrypt-ext`  | `GONC_DECRYPT_EXT`   | Suffix for decrypted files             | `""`      | -               |
+| `-h, --help`     | -                    | Help for gonc                          | -         | -               |
+| `-v, --version`  | -                    | Version for gonc                       | -         | -               |
 
 ### Commands
 
@@ -59,6 +60,12 @@ gonc -k <key> -d encrypt file1.txt file2.txt
 gonc -k <key> --encrypt-ext .encrypted encrypt file1.txt
 # Output: file1.txt.encrypted
 ```
+
+#### Flags and Environment Variables
+
+| Flag                  | Environment Variable | Description                  | Default | Valid Values |
+| --------------------- | -------------------- | ---------------------------- | ------- | ------------ |
+| `-d, --deterministic` | `GONC_DETERMINISTIC` | Use deterministic encryption | `false` | -            |
 
 #### `decrypt` (alias: `dec`) - Decrypt files
 
