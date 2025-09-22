@@ -8,6 +8,7 @@ require (
 	github.com/idelchi/gogen v0.0.0-20241105121434-33bff46b48cb
 	github.com/spf13/cobra v1.8.1
 	github.com/tink-crypto/tink-go/v2 v2.2.0
+	golang.org/x/crypto v0.28.0
 	golang.org/x/sync v0.8.0
 	google.golang.org/protobuf v1.33.0
 )
@@ -35,7 +36,6 @@ require (
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect

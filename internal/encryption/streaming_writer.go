@@ -11,26 +11,24 @@ import (
 
 // streamingWriter wraps an io.Writer with deterministic encryption capabilities.
 type streamingWriter struct {
-	// w is the underlying writer for encrypted data
-	w io.Writer
-
-	// daead handles deterministic authenticated encryption
-	daead tink.DeterministicAEAD
-
-	// buffer accumulates data until it reaches chunk size
-	buffer []byte
-
-	// associatedData is authenticated but not encrypted
-	associatedData []byte
+	w          io.Writer
+	daead      tink.DeterministicAEAD
+	buffer     []byte
+	header     []byte
+	chunkIndex uint64
 }
 
 // newStreamingWriter creates a writer that encrypts data in chunks using the provided DAEAD.
-func newStreamingWriter(w io.Writer, daead tink.DeterministicAEAD, associatedData []byte) *streamingWriter {
+func newStreamingWriter(w io.Writer, daead tink.DeterministicAEAD, header []byte) *streamingWriter {
+	hdrCopy := make([]byte, len(header))
+	copy(hdrCopy, header)
+
 	return &streamingWriter{
-		w:              w,
-		daead:          daead,
-		buffer:         make([]byte, 0, chunkSize),
-		associatedData: associatedData,
+		w:          w,
+		daead:      daead,
+		buffer:     make([]byte, 0, chunkSize),
+		header:     hdrCopy,
+		chunkIndex: 0,
 	}
 }
 
@@ -58,21 +56,22 @@ func (sw *streamingWriter) Close() error {
 
 // flushChunk encrypts and writes a chunk of the specified size.
 func (sw *streamingWriter) flushChunk(size int) error {
-	// Our chunks are limited to 1MB by design
 	if size > chunkSize {
-		return errors.New("chunk size exceeds maximum allowed size") //nolint:err113
+		return errors.New("chunk size exceeds maximum allowed size")
 	}
 
-	chunk := sw.buffer[:size]
+	chunk := make([]byte, size)
+	copy(chunk, sw.buffer[:size])
 
-	encrypted, err := sw.daead.EncryptDeterministically(chunk, sw.associatedData)
+	ad := buildChunkAssociatedData(sw.header, sw.chunkIndex)
+
+	encrypted, err := sw.daead.EncryptDeterministically(chunk, ad)
 	if err != nil {
 		return fmt.Errorf("encrypting chunk: %w", err)
 	}
 
-	// Even with AEAD overhead, encrypted size will be safe for uint32
-	//nolint:gosec	 // G115: Our chunks are limited to 1MB by design, uint32 overflow impossible
-	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil {
+	// Write ciphertext length followed by ciphertext
+	if err := binary.Write(sw.w, binary.BigEndian, uint32(len(encrypted))); err != nil { //nolint:gosec
 		return fmt.Errorf("writing chunk size: %w", err)
 	}
 
@@ -81,6 +80,17 @@ func (sw *streamingWriter) flushChunk(size int) error {
 	}
 
 	sw.buffer = sw.buffer[size:]
+	sw.chunkIndex++
 
 	return nil
+}
+
+func buildChunkAssociatedData(header []byte, index uint64) []byte {
+	const chunkIndexSize = 8
+
+	ad := make([]byte, len(header)+chunkIndexSize)
+	copy(ad, header)
+	binary.BigEndian.PutUint64(ad[len(header):], index)
+
+	return ad
 }

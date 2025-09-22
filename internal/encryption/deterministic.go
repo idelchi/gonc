@@ -18,13 +18,13 @@ import (
 
 // encryptDeterministic encrypts the input file using deterministic encryption.
 // It streams data through a deterministic AEAD writer for memory efficiency.
-func (p *Processor) encryptDeterministic(reader io.Reader, writer io.Writer) error {
-	streamingWriter := newStreamingWriter(writer, p.daead, nil)
+func (p *Processor) encryptDeterministic(reader io.Reader, writer io.Writer, header []byte) error {
+	streamingWriter := newStreamingWriter(writer, p.daead, header)
 	defer streamingWriter.Close()
 
 	buf, ok := bufferPool.Get().([]byte)
 	if !ok {
-		return errors.New("invalid buffer type from pool") //nolint:err113
+		return errors.New("invalid buffer type from pool")
 	}
 
 	defer bufferPool.Put(buf) //nolint:staticcheck
@@ -51,8 +51,10 @@ func (p *Processor) encryptDeterministic(reader io.Reader, writer io.Writer) err
 
 // decryptDeterministic decrypts the input file using deterministic encryption.
 // It reads and processes encrypted chunks sequentially.
-func (p *Processor) decryptDeterministic(reader io.Reader, writer io.Writer) error {
+func (p *Processor) decryptDeterministic(reader io.Reader, writer io.Writer, header []byte) error {
 	bufReader := bufio.NewReader(reader)
+
+	var chunkIndex uint64
 
 	for {
 		// Read chunk size
@@ -72,7 +74,10 @@ func (p *Processor) decryptDeterministic(reader io.Reader, writer io.Writer) err
 		}
 
 		// Decrypt chunk
-		decrypted, err := p.daead.DecryptDeterministically(encrypted, nil)
+		ad := buildChunkAssociatedData(header, chunkIndex)
+		chunkIndex++
+
+		decrypted, err := p.daead.DecryptDeterministically(encrypted, ad)
 		if err != nil {
 			return fmt.Errorf("decrypting chunk: %w", err)
 		}

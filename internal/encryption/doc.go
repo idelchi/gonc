@@ -1,4 +1,5 @@
-// Package encryption provides file encryption using AES-256 CBC or AES-SIV modes.
-// Features concurrent processing, streaming for large files, and atomic operations.
-// Requires 32-byte keys for CBC mode or 64-byte keys for AES-SIV mode.
+// Package encryption provides file encryption using deterministic AES-SIV or randomized AES-CTR with HMAC-SHA256.
+// It streams large files, authenticates chunk framing, and maintains file metadata such as executable bits.
+// Deterministic mode requires a 64-byte key (128 hex characters); randomized mode requires a 32-byte key (64 hex
+// characters).
 package encryption

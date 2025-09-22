@@ -1,8 +1,6 @@
 package encryption
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"errors"
 	"fmt"
 	"io"
@@ -24,13 +22,10 @@ type Processor struct {
 	// cfg contains runtime configuration options
 	cfg *config.Config
 
-	// cipher holds the AES block cipher for CBC mode
-	cipher cipher.Block
-
 	// daead provides deterministic authenticated encryption
 	daead tink.DeterministicAEAD
 
-	// key stores raw key bytes for deferred cipher initialization
+	// key stores raw key bytes
 	key []byte
 
 	// results channels processing outcomes to the printer goroutine
@@ -40,7 +35,7 @@ type Processor struct {
 const (
 	// AesSivKeySize is the required key size for AES-SIV encryption.
 	AesSivKeySize = 64
-	// AesKeySize is the required key size for AES-256 encryption.
+	// AesKeySize is the required key size for randomized encryption.
 	AesKeySize = 32
 )
 
@@ -70,64 +65,49 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 		return nil, fmt.Errorf("reading key: %w", err)
 	}
 
-	if cfg.Decrypt {
-		// Defer cipher initialization until after reading the encryption mode
-		return &Processor{
-			cfg:     cfg,
-			key:     encryptionKey,
-			results: make(chan Result, len(cfg.Files)),
-		}, nil
+	processor := &Processor{
+		cfg:     cfg,
+		key:     encryptionKey,
+		results: make(chan Result, len(cfg.Files)),
 	}
 
-	// Encryption mode is known; initialize cipher or AEAD now
-	var (
-		block             cipher.Block
-		deterministicAEAD tink.DeterministicAEAD
-	)
-
-	if cfg.Deterministic { //nolint:nestif
-		// Ensure key length is 64 bytes for AES-SIV
-		if len(encryptionKey) != AesSivKeySize {
-			return nil, errors.New( //nolint:err113
-				"NewProcessor: key must be 64 bytes (128 hex characters) for AES-SIV",
-			)
+	if cfg.Decrypt {
+		if len(encryptionKey) != AesSivKeySize && len(encryptionKey) != AesKeySize {
+			return nil, errors.New("decrypt: key must be 32 or 64 bytes (64 or 128 hex characters)")
 		}
 
-		// Initialize Deterministic AEAD
+		return processor, nil
+	}
+
+	if cfg.Deterministic { //nolint:nestif
+		if len(encryptionKey) != AesSivKeySize {
+			return nil, errors.New("encrypt: deterministic mode requires 64-byte key (128 hex characters)")
+		}
+
 		kh, err := newDeterministicAEADKeyHandle(encryptionKey)
 		if err != nil {
 			return nil, fmt.Errorf("creating keyset handle: %w", err)
 		}
 
-		deterministicAEAD, err = daead.New(kh)
+		daeadPrimitive, err := daead.New(kh)
 		if err != nil {
 			return nil, fmt.Errorf("creating DeterministicAEAD: %w", err)
 		}
-	} else {
-		// Ensure key length is 32 bytes for AES-256
-		if len(encryptionKey) != AesKeySize {
-			return nil, errors.New("key must be 32 bytes (64 hex characters) for AES-256") //nolint:err113
-		}
 
-		// Initialize AES cipher block for CBC mode
-		block, err = aes.NewCipher(encryptionKey)
-		if err != nil {
-			return nil, fmt.Errorf("creating cipher: %w", err)
+		processor.daead = daeadPrimitive
+	} else { //nolint:gocritic
+		if len(encryptionKey) != AesKeySize {
+			return nil, errors.New("encrypt: randomized mode requires 32-byte key (64 hex characters)")
 		}
 	}
 
-	return &Processor{
-		cfg:     cfg,
-		cipher:  block,
-		daead:   deterministicAEAD,
-		results: make(chan Result, len(cfg.Files)),
-	}, nil
+	return processor, nil
 }
 
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
 //
-//nolint:cyclop
+//nolint:cyclop,gocognit
 func (p *Processor) ProcessFiles() error {
 	group := errgroup.Group{}
 	group.SetLimit(p.cfg.Parallel)
@@ -164,6 +144,7 @@ func (p *Processor) ProcessFiles() error {
 
 				return err
 			}
+
 			p.results <- Result{Input: file, Output: outPath}
 
 			return nil
@@ -187,31 +168,25 @@ func (p *Processor) ProcessFiles() error {
 // and writes the result to w. The isExec parameter preserves the executable bit information.
 func (p *Processor) encrypt(reader io.Reader, writer io.Writer, isExec bool) error {
 	var (
-		mode CipherMode
+		mode envelopeMode
 		err  error
 	)
 
 	if p.cfg.Deterministic {
-		mode = ModeDeterministic
+		mode = modeDeterministic
 	} else {
-		mode = ModeCBC
+		mode = modeRandomized
 	}
 
-	header := []byte{byte(mode)}
-	if isExec {
-		header = append(header, 1)
-	} else {
-		header = append(header, 0)
-	}
-
+	header := newEnvelopeHeader(mode, isExec)
 	if _, err := writer.Write(header); err != nil {
 		return fmt.Errorf("writing header: %w", err)
 	}
 
 	if p.cfg.Deterministic {
-		err = p.encryptDeterministic(reader, writer)
+		err = p.encryptDeterministic(reader, writer, header)
 	} else {
-		err = p.encryptCBC(reader, writer)
+		err = p.encryptRandomized(reader, writer, header)
 	}
 
 	return err
@@ -220,48 +195,45 @@ func (p *Processor) encrypt(reader io.Reader, writer io.Writer, isExec bool) err
 // decrypt reads encrypted data from r, decrypts it using the mode specified in the header,
 // and writes the result to w. It returns whether the original file was executable.
 func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
-	const headerSize = 2
-
-	header := make([]byte, headerSize)
+	header := make([]byte, envelopeHeaderSize)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return false, fmt.Errorf("reading header: %w", err)
 	}
 
-	mode := CipherMode(header[0])
-	isExec := header[1] == 1
+	mode, exec, err := parseEnvelopeHeader(header)
+	if err != nil {
+		return false, err
+	}
 
 	switch mode {
-	case ModeDeterministic:
+	case modeDeterministic:
 		if len(p.key) != AesSivKeySize {
-			return false, errors.New("decrypt: key must be 64 bytes (128 hex characters) for AES-SIV") //nolint:err113
+			return false, errors.New("decrypt: deterministic data requires 64-byte key (128 hex characters)")
 		}
 
-		kh, err := newDeterministicAEADKeyHandle(p.key)
-		if err != nil {
-			return false, fmt.Errorf("creating keyset handle: %w", err)
+		if p.daead == nil {
+			kh, err := newDeterministicAEADKeyHandle(p.key)
+			if err != nil {
+				return false, fmt.Errorf("creating keyset handle: %w", err)
+			}
+
+			daeadPrimitive, err := daead.New(kh)
+			if err != nil {
+				return false, fmt.Errorf("creating DeterministicAEAD: %w", err)
+			}
+
+			p.daead = daeadPrimitive
 		}
 
-		p.daead, err = daead.New(kh)
-		if err != nil {
-			return false, fmt.Errorf("creating DeterministicAEAD: %w", err)
-		}
-
-		return isExec, p.decryptDeterministic(reader, writer)
-	case ModeCBC:
+		return exec, p.decryptDeterministic(reader, writer, header)
+	case modeRandomized:
 		if len(p.key) != AesKeySize {
-			return false, errors.New("decrypt: key must be 32 bytes (64 hex characters) for AES-256") //nolint:err113
+			return false, errors.New("decrypt: randomized data requires 32-byte key (64 hex characters)")
 		}
 
-		var err error
-
-		p.cipher, err = aes.NewCipher(p.key)
-		if err != nil {
-			return false, fmt.Errorf("creating cipher: %w", err)
-		}
-
-		return isExec, p.decryptCBC(reader, writer)
+		return exec, p.decryptRandomized(reader, writer, header)
 	default:
-		return false, fmt.Errorf("unknown encryption mode: %d", mode) //nolint:err113
+		return false, errors.New("unknown encryption mode")
 	}
 }
 
@@ -276,6 +248,7 @@ func (p *Processor) processFile(filename, outPath string) error {
 	}
 
 	const executableBits = 0o111
+
 	isExec := info.Mode()&executableBits != 0
 
 	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
@@ -308,6 +281,7 @@ func (p *Processor) processFile(filename, outPath string) error {
 		}
 
 		perm := os.FileMode(ownerReadWrite)
+
 		if execOut {
 			perm |= 0o111
 		}

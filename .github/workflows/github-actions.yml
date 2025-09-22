@@ -7,34 +7,22 @@ on:
     branches:
       - dev
       - main
-    tags:
-      - "*"
 
 jobs:
   info:
     uses: idelchi/devenv/.github/workflows/info.yml@main
 
-  cleanup:
-    uses: idelchi/devenv/.github/workflows/cleanup.yml@main
-    if: github.ref == 'refs/heads/dev'
-    needs: info
-    permissions:
-      actions: write
-
   verify:
-    if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
     uses: idelchi/devenv/.github/workflows/task.yml@main
     needs: info
 
   test:
-    if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
     needs: verify
     strategy:
       matrix:
         os:
           - ubuntu-24.04
           - windows-2022
-          - macos-14
     runs-on: ${{ matrix.os }}
     env:
       GOGEN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,7 +31,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23.2"
+          go-version: "1.25.1"
           check-latest: true
 
       - name: Test
@@ -52,26 +40,5 @@ jobs:
           export PATH=~/.local/bin:$PATH
           echo "Added '~/.local/bin' to PATH"
           curl -sSL https://raw.githubusercontent.com/idelchi/gogen/refs/heads/dev/install.sh | sh -s -- -d ~/.local/bin
-          ./tests/gonc.sh
-
-  next-tag:
-    uses: idelchi/devenv/.github/workflows/next-tag.yml@main
-    if: github.ref == 'refs/heads/dev'
-    needs: test
-
-  prerelease:
-    uses: idelchi/devenv/.github/workflows/prerelease.yml@main
-    if: github.ref == 'refs/heads/dev'
-    needs: next-tag
-    permissions:
-      contents: write
-      actions: write
-    with:
-      tag: ${{ needs.next-tag.outputs.next }}-beta
-
-  release:
-    uses: idelchi/devenv/.github/workflows/gorelease.yml@main
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: info
-    permissions:
-      contents: write
+          ./tests/gonc-deterministic.sh
+          ./tests/gonc-indeterministic.sh
