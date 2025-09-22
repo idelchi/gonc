@@ -1,8 +1,6 @@
 module github.com/idelchi/gonc
 
-go 1.23.0
-
-toolchain go1.23.2
+go 1.25.1
 
 require (
 	github.com/idelchi/gogen v0.0.0-20241105121434-33bff46b48cb
