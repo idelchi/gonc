@@ -74,6 +74,11 @@ func resolveFiles(cfg *config.Config) (int, error) {
 
 	hasIncludes := len(cfg.Include) > 0 || cfg.IncludeFrom != ""
 
+	if cfg.Decrypt && !hasIncludes {
+		includes = append(includes, "*"+cfg.Suffixes.Encrypt)
+		hasIncludes = true
+	}
+
 	files, scanned, err := filter.Resolve(cfg.Files, includes, excludes, hasIncludes)
 	if err != nil {
 		return scanned, fmt.Errorf("filtering files: %w", err)

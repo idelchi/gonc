@@ -149,16 +149,26 @@ Decrypt encrypted files using the specified key. The embedded header
 indicates whether deterministic or randomized mode was used, so no additional flag
 is required.
 
+When walking directories, decrypt automatically filters by `--encrypt-ext`
+(default `*.enc`). Explicit `--include` or `--include-from` overrides this.
+
 Examples:
 
 ```sh
-# Decrypt files
+# Decrypt all .enc files in current directory (auto-filtered)
+gonc -k <key> decrypt .
+
+# Decrypt specific files (bypass filtering)
 gonc -k <key> decrypt file1.txt.enc file2.txt.enc
 # Output: file1.txt, file2.txt
 
 # Decrypt with custom extension
 gonc -k <key> --decrypt-ext .decrypted decrypt file1.txt.enc
 # Output: file1.txt.decrypted
+
+# Custom encrypt-ext — auto-filters by it
+gonc -k <key> --encrypt-ext .sensitive.enc decrypt .
+# Only processes *.sensitive.enc files
 ```
 
 ### Key Format
