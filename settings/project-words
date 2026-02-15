@@ -11,8 +11,10 @@ cobraext
 cyclop
 daead
 errgroup
+fnmatch
 forbidigo
 funlen
+goccy
 gochecknoglobals
 gocognit
 gocritic
@@ -25,7 +27,11 @@ insecurecleartextkeyset
 mapstructure
 nestif
 nolint
+pathmatch
 pkcs
 sivpb
+stdlib
+subtests
+tidwall
 tink
 tinkpb

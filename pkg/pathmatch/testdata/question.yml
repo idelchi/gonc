@@ -1,0 +1,53 @@
+- name: question mark basics
+  description: "? matches exactly one character"
+  cases:
+    - pattern: "doc/?"
+      path: "doc/a"
+      match: true
+    - pattern: "doc/?"
+      path: "doc/z"
+      match: true
+    - pattern: "doc/?"
+      path: "doc/ab"
+      match: false
+
+- name: question mark crosses slash
+  description: "? matches any single character including /"
+  cases:
+    - pattern: "doc/?"
+      path: "doc/a/b"
+      match: false
+      description: "no match because path has extra characters beyond the single ?"
+    - pattern: "a?b"
+      path: "a/b"
+      match: true
+      description: "? matches / in find -path semantics"
+    - pattern: "a?b"
+      path: "axb"
+      match: true
+
+- name: multiple question marks
+  description: "each ? matches exactly one non-slash char"
+  cases:
+    - pattern: "doc/??"
+      path: "doc/ab"
+      match: true
+    - pattern: "doc/??"
+      path: "doc/a"
+      match: false
+    - pattern: "doc/??"
+      path: "doc/abc"
+      match: false
+
+- name: question mark with star
+  description: "? and * combined"
+  cases:
+    - pattern: "?oo/*"
+      path: "foo/bar.txt"
+      match: true
+    - pattern: "?oo/*"
+      path: "boo/sub/deep.txt"
+      match: true
+    - pattern: "?oo/*"
+      path: "oo/bar.txt"
+      match: false

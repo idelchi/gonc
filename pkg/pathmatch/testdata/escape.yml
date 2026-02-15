@@ -1,0 +1,36 @@
+- name: escaped star
+  description: backslash escapes * to literal
+  cases:
+    - pattern: "doc/\\*.txt"
+      path: "doc/*.txt"
+      match: true
+    - pattern: "doc/\\*.txt"
+      path: "doc/foo.txt"
+      match: false
+
+- name: escaped question mark
+  description: backslash escapes ? to literal
+  cases:
+    - pattern: "doc/\\?.txt"
+      path: "doc/?.txt"
+      match: true
+    - pattern: "doc/\\?.txt"
+      path: "doc/a.txt"
+      match: false
+
+- name: escaped bracket
+  description: backslash escapes [ to literal
+  cases:
+    - pattern: "doc/\\[1\\].txt"
+      path: "doc/[1].txt"
+      match: true
+    - pattern: "doc/\\[1\\].txt"
+      path: "doc/1.txt"
+      match: false
+
+- name: escaped backslash
+  description: backslash escapes backslash to literal
+  cases:
+    - pattern: "doc/\\\\file"
+      path: "doc/\\file"
+      match: true

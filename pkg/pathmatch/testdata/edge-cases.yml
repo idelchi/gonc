@@ -1,0 +1,52 @@
+- name: empty pattern
+  description: empty pattern matches only empty string
+  cases:
+    - pattern: ""
+      path: ""
+      match: true
+    - pattern: ""
+      path: "anything"
+      match: false
+
+- name: dots in paths
+  description: dots are literal, not regex wildcards
+  cases:
+    - pattern: "file.txt"
+      path: "filextxt"
+      match: false
+      description: dot must be literal, not regex any-char
+    - pattern: "file.txt"
+      path: "file.txt"
+      match: true
+
+- name: regex metacharacters
+  description: regex-special chars are treated as literals
+  cases:
+    - pattern: "file(1).txt"
+      path: "file(1).txt"
+      match: true
+    - pattern: "file+name.txt"
+      path: "file+name.txt"
+      match: true
+    - pattern: "price$10"
+      path: "price$10"
+      match: true
+    - pattern: "a|b"
+      path: "a|b"
+      match: true
+    - pattern: "a|b"
+      path: "a"
+      match: false
+
+- name: path separators
+  description: slashes are literals in patterns
+  cases:
+    - pattern: "a/b/c"
+      path: "a/b/c"
+      match: true
+    - pattern: "a/b/c"
+      path: "a/b/c/d"
+      match: false
+    - pattern: "a/b/*"
+      path: "a/b/c/d"
+      match: true

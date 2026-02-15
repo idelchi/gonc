@@ -106,9 +106,10 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 
 // ProcessFiles concurrently processes all files specified in the configuration.
 // It encrypts or decrypts files based on the configuration settings.
+// Returns the number of successfully processed files and the number of errors.
 //
 //nolint:cyclop,gocognit
-func (p *Processor) ProcessFiles() error {
+func (p *Processor) ProcessFiles() (processed, errored int, totalSize int64, err error) {
 	group := errgroup.Group{}
 	group.SetLimit(p.cfg.Parallel)
 
@@ -119,9 +120,17 @@ func (p *Processor) ProcessFiles() error {
 
 		for result := range p.results {
 			if result.Error != nil {
+				errored++
+
 				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", result.Input, result.Error)
-			} else if !p.cfg.Quiet {
-				fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint:forbidigo
+			} else {
+				processed++
+
+				totalSize += result.OutputSize
+
+				if !p.cfg.Quiet {
+					fmt.Printf("Processed %q -> %q\n", result.Input, result.Output) //nolint:forbidigo
+				}
 			}
 
 			if p.cfg.Delete && result.Error == nil {
@@ -139,29 +148,31 @@ func (p *Processor) ProcessFiles() error {
 	for _, file := range p.cfg.Files {
 		group.Go(func() error {
 			outPath := p.outputPath(file)
-			if err := p.processFile(file, outPath); err != nil {
+
+			size, err := p.processFile(file, outPath)
+			if err != nil {
 				p.results <- Result{Input: file, Error: err}
 
 				return err
 			}
 
-			p.results <- Result{Input: file, Output: outPath}
+			p.results <- Result{Input: file, Output: outPath, OutputSize: size}
 
 			return nil
 		})
 	}
 
-	err := group.Wait()
+	err = group.Wait()
 
 	close(p.results)
 
 	<-done // Wait for printer to finish
 
 	if err != nil {
-		return fmt.Errorf("processing files: %w", err)
+		return processed, errored, totalSize, fmt.Errorf("processing files: %w", err)
 	}
 
-	return nil
+	return processed, errored, totalSize, nil
 }
 
 // encrypt reads data from r, encrypts it using the configured mode,
@@ -240,11 +251,11 @@ func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
 // processFile handles the encryption or decryption of a single file.
 // It creates a temporary file for output and performs an atomic rename on completion.
 //
-//nolint:funlen,cyclop
-func (p *Processor) processFile(filename, outPath string) error {
+//nolint:funlen,cyclop,gocognit
+func (p *Processor) processFile(filename, outPath string) (int64, error) {
 	info, err := os.Stat(filename)
 	if err != nil {
-		return fmt.Errorf("getting file info for %q: %w", filename, err)
+		return 0, fmt.Errorf("getting file info for %q: %w", filename, err)
 	}
 
 	const executableBits = 0o111
@@ -253,7 +264,7 @@ func (p *Processor) processFile(filename, outPath string) error {
 
 	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
 	if err != nil {
-		return fmt.Errorf("creating temporary file: %w", err)
+		return 0, fmt.Errorf("creating temporary file: %w", err)
 	}
 
 	tmpName := tmpFile.Name()
@@ -268,7 +279,7 @@ func (p *Processor) processFile(filename, outPath string) error {
 
 	inFile, err := os.Open(filepath.Clean(filename))
 	if err != nil {
-		return fmt.Errorf("opening input file: %w", err)
+		return 0, fmt.Errorf("opening input file: %w", err)
 	}
 	defer inFile.Close()
 
@@ -277,7 +288,7 @@ func (p *Processor) processFile(filename, outPath string) error {
 	if p.cfg.Decrypt { //nolint:nestif
 		execOut, err := p.decrypt(inFile, tmpFile)
 		if err != nil {
-			return fmt.Errorf("decrypting file: %w", err)
+			return 0, fmt.Errorf("decrypting file: %w", err)
 		}
 
 		perm := os.FileMode(ownerReadWrite)
@@ -287,11 +298,11 @@ func (p *Processor) processFile(filename, outPath string) error {
 		}
 
 		if err := os.Chmod(tmpName, perm); err != nil {
-			return fmt.Errorf("setting file permissions: %w", err)
+			return 0, fmt.Errorf("setting file permissions: %w", err)
 		}
 	} else {
 		if err := p.encrypt(inFile, tmpFile, isExec); err != nil {
-			return fmt.Errorf("encrypting file: %w", err)
+			return 0, fmt.Errorf("encrypting file: %w", err)
 		}
 
 		perm := os.FileMode(ownerReadWrite)
@@ -301,23 +312,34 @@ func (p *Processor) processFile(filename, outPath string) error {
 		}
 
 		if err := os.Chmod(tmpName, perm); err != nil {
-			return fmt.Errorf("setting file permissions: %w", err)
+			return 0, fmt.Errorf("setting file permissions: %w", err)
 		}
 	}
 
 	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("closing temporary file: %w", err)
+		return 0, fmt.Errorf("closing temporary file: %w", err)
 	}
 
 	if err := inFile.Close(); err != nil {
-		return fmt.Errorf("closing input file: %w", err)
+		return 0, fmt.Errorf("closing input file: %w", err)
 	}
 
 	if err := os.Rename(tmpName, outPath); err != nil {
-		return fmt.Errorf("renaming output file: %w", err)
+		return 0, fmt.Errorf("renaming output file: %w", err)
 	}
 
-	return nil
+	if p.cfg.PreserveTimestamps {
+		if err := os.Chtimes(outPath, info.ModTime(), info.ModTime()); err != nil {
+			return 0, fmt.Errorf("preserving timestamps: %w", err)
+		}
+	}
+
+	outInfo, err := os.Stat(outPath)
+	if err != nil {
+		return 0, fmt.Errorf("stat output %q: %w", outPath, err)
+	}
+
+	return outInfo.Size(), nil
 }
 
 // outputPath generates the output file path based on the input filename

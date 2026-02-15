@@ -22,7 +22,7 @@ Provides commands for key generation, encryption, and decryption.`
 	root.Flags().BoolP("show", "s", false, "Show the configuration and exit")
 	root.Flags().IntP("parallel", "j", runtime.NumCPU(), "Number of parallel workers, defaults to number of CPUs")
 	root.Flags().BoolP("quiet", "q", false, "Suppress non-error output")
-	root.Flags().BoolP("delete", "d", false, "Delete the original file after successful encryption/decryption")
+	root.Flags().Bool("delete", false, "Delete the original file after successful encryption/decryption")
 
 	root.Flags().StringP("key", "k", "", "Encryption key (64 or 32 bytes, hex-encoded)")
 	root.Flags().
@@ -30,6 +30,15 @@ Provides commands for key generation, encryption, and decryption.`
 
 	root.Flags().String("encrypt-ext", ".enc", "Suffix to append to encrypted files")
 	root.Flags().String("decrypt-ext", "", "Suffix to append to decrypted files, after stripping the encrypted suffix")
+
+	root.Flags().StringSlice("include", nil, "Glob patterns to narrow results (repeatable)")
+	root.Flags().StringSlice("exclude", nil, "Glob patterns to exclude from results (repeatable)")
+	root.Flags().String("include-from", "", "Path to JSONC file with include glob patterns")
+	root.Flags().String("exclude-from", "", "Path to JSONC file with exclude glob patterns")
+
+	root.Flags().Bool("dry", false, "Show what would be processed without actually doing it")
+	root.Flags().Bool("stats", false, "Print processing statistics after completion")
+	root.Flags().Bool("preserve-timestamps", false, "Preserve original file modification times")
 
 	root.AddCommand(NewEncryptCommand(cfg), NewDecryptCommand(cfg))
 

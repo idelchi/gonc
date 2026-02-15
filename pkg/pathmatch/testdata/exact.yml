@@ -1,0 +1,41 @@
+- name: exact path match
+  description: literal paths without wildcards
+  cases:
+    - pattern: "appl/src/immo.c"
+      path: "appl/src/immo.c"
+      match: true
+    - pattern: "appl/src/immo.c"
+      path: "appl/src/immo.h"
+      match: false
+    - pattern: "appl/src/immo.c"
+      path: "appl/src/immo.c.bak"
+      match: false
+    - pattern: "appl/src/immo.c"
+      path: "other/appl/src/immo.c"
+      match: false
+
+- name: simple filename
+  description: plain filename match
+  cases:
+    - pattern: "README.md"
+      path: "README.md"
+      match: true
+    - pattern: "README.md"
+      path: "docs/README.md"
+      match: false
+    - pattern: "README.md"
+      path: "README.txt"
+      match: false
+
+- name: dotfile
+  description: dot-prefixed files
+  cases:
+    - pattern: ".gitignore"
+      path: ".gitignore"
+      match: true
+    - pattern: ".vscode/settings.json"
+      path: ".vscode/settings.json"
+      match: true
+    - pattern: ".vscode/settings.json"
+      path: ".vscode/launch.json"
+      match: false

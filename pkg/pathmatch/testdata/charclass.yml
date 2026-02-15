@@ -1,0 +1,51 @@
+- name: character class basics
+  description: "[...] matches one character from the set"
+  cases:
+    - pattern: "doc/[abc]*"
+      path: "doc/alpha.txt"
+      match: true
+    - pattern: "doc/[abc]*"
+      path: "doc/bravo.txt"
+      match: true
+    - pattern: "doc/[abc]*"
+      path: "doc/charlie/deep.txt"
+      match: true
+    - pattern: "doc/[abc]*"
+      path: "doc/delta.txt"
+      match: false
+
+- name: character class with slash
+  description: "[...] can match / in find -path semantics"
+  cases:
+    - pattern: "[abc]"
+      path: "a"
+      match: true
+    - pattern: "x[/]y"
+      path: "x/y"
+      match: true
+
+- name: character class negation
+  description: "[!...] matches any character NOT in the set"
+  cases:
+    - pattern: "doc/[!a]*"
+      path: "doc/bravo.txt"
+      match: true
+    - pattern: "doc/[!a]*"
+      path: "doc/alpha.txt"
+      match: false
+
+- name: character class range
+  description: "[a-z] range syntax"
+  cases:
+    - pattern: "[a-z]*"
+      path: "foo.txt"
+      match: true
+    - pattern: "[a-z]*"
+      path: "FOO.txt"
+      match: false
+    - pattern: "[0-9]*"
+      path: "3file.txt"
+      match: true
+    - pattern: "[0-9]*"
+      path: "file.txt"
+      match: false

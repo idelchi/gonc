@@ -1,5 +1,5 @@
 // Package parse generates and executes the command-line interface for the application.
-package parse
+package parse //nolint:revive // no stdlib conflict; internal package
 
 import (
 	"errors"

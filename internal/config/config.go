@@ -54,8 +54,29 @@ type Config struct {
 	// Decrypt files
 	Decrypt bool `mapstructure:"-"`
 
-	// Files to process
-	Files []string `validate:"required"`
+	// Inline include glob patterns
+	Include []string `mapstructure:"include"`
+
+	// Inline exclude glob patterns
+	Exclude []string `mapstructure:"exclude"`
+
+	// Path to JSONC file with include glob patterns
+	IncludeFrom string `mapstructure:"include-from"`
+
+	// Path to JSONC file with exclude glob patterns
+	ExcludeFrom string `mapstructure:"exclude-from"`
+
+	// Dry run mode — show what would be processed without doing it
+	Dry bool
+
+	// Print processing statistics
+	Stats bool
+
+	// Preserve original file modification times
+	PreserveTimestamps bool `mapstructure:"preserve-timestamps"`
+
+	// Files or directories to process
+	Files []string
 }
 
 // Display returns the value of the Show field.
@@ -66,7 +87,7 @@ func (c Config) Display() bool {
 // Validate performs configuration validation using the validator package.
 // It returns a wrapped ErrUsage if any validation rules are violated.
 func (c Config) Validate(config any) error {
-	validator := validator.NewValidator()
+	validator := validator.New()
 
 	if err := registerExclusive(validator); err != nil {
 		return fmt.Errorf("registering exclusive: %w", err)

@@ -1,0 +1,83 @@
+- name: star crosses slashes
+  description: "* matches any characters including /"
+  cases:
+    - pattern: "doc/*"
+      path: "doc/foo.txt"
+      match: true
+    - pattern: "doc/*"
+      path: "doc/sub/deep/file.txt"
+      match: true
+    - pattern: "doc/*"
+      path: "other/foo.txt"
+      match: false
+
+- name: star with suffix
+  description: "* with file extension"
+  cases:
+    - pattern: "doc/*.txt"
+      path: "doc/foo.txt"
+      match: true
+    - pattern: "doc/*.txt"
+      path: "doc/sub/deep/file.txt"
+      match: true
+    - pattern: "doc/*.txt"
+      path: "doc/sub/deep/file.go"
+      match: false
+
+- name: star with prefix
+  description: "prefix before *"
+  cases:
+    - pattern: "src/main*"
+      path: "src/main.go"
+      match: true
+    - pattern: "src/main*"
+      path: "src/main_test.go"
+      match: true
+    - pattern: "src/main*"
+      path: "src/other.go"
+      match: false
+
+- name: star only
+  description: "bare * matches everything"
+  cases:
+    - pattern: "*"
+      path: "foo.txt"
+      match: true
+    - pattern: "*"
+      path: "sub/deep/file.txt"
+      match: true
+    - pattern: "*"
+      path: ""
+      match: true
+
+- name: star in middle
+  description: "* between path components"
+  cases:
+    - pattern: "src/*.go"
+      path: "src/main.go"
+      match: true
+    - pattern: "src/*.go"
+      path: "src/pkg/util.go"
+      match: true
+    - pattern: "src/*.go"
+      path: "src/pkg/util.txt"
+      match: false
+
+- name: multiple stars
+  description: "multiple * in one pattern"
+  cases:
+    - pattern: "*/src/*"
+      path: "project/src/main.go"
+      match: true
+    - pattern: "*/src/*"
+      path: "a/b/src/c/d/e.txt"
+      match: true
+    - pattern: "*.log"
+      path: "sub/deep/bar.log"
+      match: true
+    - pattern: "*.log"
+      path: "foo.log"
+      match: true
+    - pattern: "*.log"
+      path: "foo.txt"
+      match: false

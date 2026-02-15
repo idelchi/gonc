@@ -8,6 +8,9 @@ type Result struct {
 	// Output file path
 	Output string
 
+	// Output file size in bytes
+	OutputSize int64
+
 	// Any error that occurred during processing
 	Error error
 }
