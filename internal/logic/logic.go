@@ -8,26 +8,21 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dustin/go-humanize"
 
 	"github.com/idelchi/gonc/internal/config"
 	"github.com/idelchi/gonc/internal/encryption"
+	"github.com/idelchi/gonc/internal/fileutil"
 	"github.com/idelchi/gonc/internal/filter"
 )
 
 // Run is the main logic of the application.
 func Run(cfg *config.Config) error {
-	start := time.Now()
-
-	scanned, err := resolveFiles(cfg)
-	if err != nil {
-		return fmt.Errorf("resolving files: %w", err)
-	}
-
-	excluded := scanned - len(cfg.Files)
-
-	if cfg.Dry {
-		return dryRun(cfg, scanned, excluded, start)
+	scanned, excluded, start, done, err := preamble(cfg)
+	if done || err != nil {
+		return err
 	}
 
 	proc, err := encryption.NewProcessor(cfg)
@@ -46,6 +41,24 @@ func Run(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// preamble resolves files and handles dry run. Returns done=true if dry run was executed.
+func preamble(cfg *config.Config) (int, int, time.Time, bool, error) {
+	start := time.Now()
+
+	scanned, err := resolveFiles(cfg)
+	if err != nil {
+		return 0, 0, start, false, fmt.Errorf("resolving files: %w", err)
+	}
+
+	excluded := scanned - len(cfg.Files)
+
+	if cfg.Dry {
+		return scanned, excluded, start, true, dryRun(cfg, scanned, excluded, start)
+	}
+
+	return scanned, excluded, start, false, nil
 }
 
 // resolveFiles normalizes positional args, expands globs, and applies include/exclude filtering.
@@ -90,6 +103,8 @@ func resolveFiles(cfg *config.Config) (int, error) {
 }
 
 // dryRun previews what would be processed without actually encrypting/decrypting.
+//
+//nolint:unparam // signature kept for consistency with Run callers
 func dryRun(cfg *config.Config, scanned, excluded int, start time.Time) error {
 	var totalSize int64
 
@@ -123,6 +138,136 @@ func outputPath(filename string, cfg *config.Config) string {
 	}
 
 	return filepath.Join(filepath.Dir(filename), filepath.Base(filename)+ext)
+}
+
+// RunRedact replaces file contents with a fixed string, writing output to <file><encrypt-ext>.
+//
+//nolint:cyclop,gocognit // parallel processing pipeline with printer goroutine
+func RunRedact(cfg *config.Config) error {
+	scanned, excluded, start, done, err := preamble(cfg)
+	if done || err != nil {
+		return err
+	}
+
+	type result struct {
+		input      string
+		output     string
+		outputSize int64
+		err        error
+	}
+
+	results := make(chan result, len(cfg.Files))
+
+	group := errgroup.Group{}
+	group.SetLimit(cfg.Parallel)
+
+	printed := make(chan struct{})
+
+	var processed, errored int
+
+	var totalSize int64
+
+	go func() {
+		defer close(printed)
+
+		for res := range results {
+			if res.err != nil {
+				errored++
+
+				fmt.Fprintf(os.Stderr, "Error processing %q: %v\n", res.input, res.err)
+			} else {
+				processed++
+
+				totalSize += res.outputSize
+
+				if !cfg.Quiet {
+					fmt.Printf("Processed %q -> %q\n", res.input, res.output) //nolint:forbidigo
+				}
+			}
+
+			if cfg.Delete && res.err == nil {
+				if err := os.Remove(res.input); err != nil {
+					fmt.Fprintf(os.Stderr, "Error deleting %q: %v\n", res.input, err)
+				} else if !cfg.Quiet {
+					fmt.Printf("Deleted %q\n", res.input) //nolint:forbidigo
+				}
+			}
+		}
+	}()
+
+	for _, file := range cfg.Files {
+		group.Go(func() error {
+			outPath := outputPath(file, cfg)
+
+			size, err := redactFile(file, outPath, cfg)
+			if err != nil {
+				results <- result{input: file, err: err}
+
+				return err
+			}
+
+			results <- result{input: file, output: outPath, outputSize: size}
+
+			return nil
+		})
+	}
+
+	err = group.Wait()
+
+	close(results)
+
+	<-printed
+
+	if cfg.Stats {
+		printStats(scanned, excluded, processed, errored, totalSize, time.Since(start))
+	}
+
+	if err != nil {
+		return fmt.Errorf("redacting files: %w", err)
+	}
+
+	return nil
+}
+
+// redactFile writes the content string to a temp file and atomically renames it to outPath.
+func redactFile(filename, outPath string, cfg *config.Config) (size int64, err error) {
+	tc, err := fileutil.NewTempContext(filename, outPath)
+	if err != nil {
+		return 0, fmt.Errorf("preparing atomic write: %w", err)
+	}
+
+	defer tc.CleanupOnError(&err)
+
+	if _, err = tc.TmpFile.WriteString(cfg.Content); err != nil {
+		return 0, fmt.Errorf("writing content: %w", err)
+	}
+
+	const ownerReadWrite = 0o600
+
+	perm := os.FileMode(ownerReadWrite)
+
+	if tc.IsExec {
+		perm |= 0o111
+	}
+
+	if err := os.Chmod(tc.TmpName, perm); err != nil {
+		return 0, fmt.Errorf("setting file permissions: %w", err)
+	}
+
+	if err := tc.TmpFile.Close(); err != nil {
+		return 0, fmt.Errorf("closing temporary file: %w", err)
+	}
+
+	if err := os.Rename(tc.TmpName, outPath); err != nil {
+		return 0, fmt.Errorf("renaming output file: %w", err)
+	}
+
+	size, err = fileutil.FinalizeOutput(outPath, cfg.PreserveTimestamps, tc.SrcInfo.ModTime())
+	if err != nil {
+		return 0, fmt.Errorf("finalizing output: %w", err)
+	}
+
+	return size, nil
 }
 
 func printStats(scanned, excluded, processed, errored int, totalSize int64, duration time.Duration) {

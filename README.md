@@ -137,11 +137,9 @@ gonc -k <key> --encrypt-ext .encrypted encrypt file1.txt
 # Output: file1.txt.encrypted
 ```
 
-#### Configuration
-
-| Flag                  | Environment Variable | Description                  | Default | Valid Values |
-| --------------------- | -------------------- | ---------------------------- | ------- | ------------ |
-| `-d, --deterministic` | `GONC_DETERMINISTIC` | Use deterministic encryption | `false` | -            |
+| Flag                  | Environment Variable | Description                  | Default |
+| --------------------- | -------------------- | ---------------------------- | ------- |
+| `-d, --deterministic` | `GONC_DETERMINISTIC` | Use deterministic encryption | `false` |
 
 #### `decrypt` (alias: `dec`) - Decrypt files
 
@@ -170,6 +168,34 @@ gonc -k <key> --decrypt-ext .decrypted decrypt file1.txt.enc
 gonc -k <key> --encrypt-ext .sensitive.enc decrypt .
 # Only processes *.sensitive.enc files
 ```
+
+#### `redact` (alias: `red`) - Replace file contents
+
+Replace file contents with a fixed string. No encryption — a one-way
+destructive operation. Output files get `--encrypt-ext` suffix.
+Does not require `--key`.
+
+Examples:
+
+```sh
+# Redact all files in current directory
+gonc redact .
+# Output: file1.txt.enc contains "<REDACTED>"
+
+# Redact with custom content
+gonc redact --content "CLASSIFIED" ./secrets
+# Output: each file.enc contains "CLASSIFIED"
+
+# Redact and delete originals
+gonc --delete redact .
+
+# Preview what would be redacted
+gonc --dry redact .
+```
+
+| Flag        | Env            | Description         | Default      |
+| ----------- | -------------- | ------------------- | ------------ |
+| `--content` | `GONC_CONTENT` | Replacement content | `<REDACTED>` |
 
 ### Key Format
 

@@ -22,7 +22,7 @@ type Suffixes struct {
 // Key contains the encryption key.
 type Key struct {
 	// Key in hexadecimal format
-	String string `label:"--key" mapstructure:"key" mask:"fixed" validate:"hexadecimal,len=64|len=128,exclusive=File"`
+	String string `label:"--key" mapstructure:"key" mask:"fixed" validate:"omitempty,hexadecimal,len=64|len=128,exclusive=File"` //nolint:lll // struct tags
 
 	// Key in a file
 	File string `label:"--key-file" mapstructure:"key-file" validate:"exclusive=String"`
@@ -53,6 +53,12 @@ type Config struct {
 
 	// Decrypt files
 	Decrypt bool `mapstructure:"-"`
+
+	// Redact mode — replace file contents with fixed string
+	Redact bool `mapstructure:"-"`
+
+	// Content string to write when redacting
+	Content string `mapstructure:"content"`
 
 	// Inline include glob patterns
 	Include []string `mapstructure:"include"`
@@ -102,6 +108,10 @@ func (c Config) Validate(config any) error {
 		return fmt.Errorf("%w: %w", ErrUsage, errs[0])
 	case len(errs) > 1:
 		return fmt.Errorf("%ws:\n%w", ErrUsage, errors.Join(errs...))
+	}
+
+	if c.Redact && (c.Key.String != "" || c.Key.File != "") {
+		return fmt.Errorf("%w: --key/--key-file cannot be used with redact", ErrUsage)
 	}
 
 	return nil

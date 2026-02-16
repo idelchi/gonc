@@ -11,6 +11,7 @@ cobraext
 cyclop
 daead
 errgroup
+errp
 fnmatch
 forbidigo
 funlen
@@ -35,3 +36,4 @@ subtests
 tidwall
 tink
 tinkpb
+unparam

@@ -3,6 +3,7 @@
 // It implements commands for:
 //   - encryption
 //   - decryption
+//   - redaction
 //
 // The package handles command-line parsing, configuration validation,
 // and environment variable binding through cobra and viper.

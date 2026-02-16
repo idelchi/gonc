@@ -15,6 +15,7 @@ import (
 
 	"github.com/idelchi/gogen/pkg/key"
 	"github.com/idelchi/gonc/internal/config"
+	"github.com/idelchi/gonc/internal/fileutil"
 )
 
 // Processor handles the encryption and decryption of files.
@@ -252,30 +253,13 @@ func (p *Processor) decrypt(reader io.Reader, writer io.Writer) (bool, error) {
 // It creates a temporary file for output and performs an atomic rename on completion.
 //
 //nolint:funlen,cyclop,gocognit
-func (p *Processor) processFile(filename, outPath string) (int64, error) {
-	info, err := os.Stat(filename)
+func (p *Processor) processFile(filename, outPath string) (size int64, err error) {
+	tc, err := fileutil.NewTempContext(filename, outPath)
 	if err != nil {
-		return 0, fmt.Errorf("getting file info for %q: %w", filename, err)
+		return 0, fmt.Errorf("preparing atomic write: %w", err)
 	}
 
-	const executableBits = 0o111
-
-	isExec := info.Mode()&executableBits != 0
-
-	tmpFile, err := os.CreateTemp(filepath.Dir(outPath), ".tmp-*")
-	if err != nil {
-		return 0, fmt.Errorf("creating temporary file: %w", err)
-	}
-
-	tmpName := tmpFile.Name()
-
-	defer func() {
-		tmpFile.Close() //nolint:gosec
-
-		if err != nil {
-			os.Remove(tmpName) //nolint:gosec
-		}
-	}()
+	defer tc.CleanupOnError(&err)
 
 	inFile, err := os.Open(filepath.Clean(filename))
 	if err != nil {
@@ -286,7 +270,7 @@ func (p *Processor) processFile(filename, outPath string) (int64, error) {
 	const ownerReadWrite = 0o600
 
 	if p.cfg.Decrypt { //nolint:nestif
-		execOut, err := p.decrypt(inFile, tmpFile)
+		execOut, err := p.decrypt(inFile, tc.TmpFile)
 		if err != nil {
 			return 0, fmt.Errorf("decrypting file: %w", err)
 		}
@@ -297,26 +281,26 @@ func (p *Processor) processFile(filename, outPath string) (int64, error) {
 			perm |= 0o111
 		}
 
-		if err := os.Chmod(tmpName, perm); err != nil {
+		if err := os.Chmod(tc.TmpName, perm); err != nil {
 			return 0, fmt.Errorf("setting file permissions: %w", err)
 		}
 	} else {
-		if err := p.encrypt(inFile, tmpFile, isExec); err != nil {
+		if err := p.encrypt(inFile, tc.TmpFile, tc.IsExec); err != nil {
 			return 0, fmt.Errorf("encrypting file: %w", err)
 		}
 
 		perm := os.FileMode(ownerReadWrite)
 
-		if isExec {
+		if tc.IsExec {
 			perm |= 0o111
 		}
 
-		if err := os.Chmod(tmpName, perm); err != nil {
+		if err := os.Chmod(tc.TmpName, perm); err != nil {
 			return 0, fmt.Errorf("setting file permissions: %w", err)
 		}
 	}
 
-	if err := tmpFile.Close(); err != nil {
+	if err := tc.TmpFile.Close(); err != nil {
 		return 0, fmt.Errorf("closing temporary file: %w", err)
 	}
 
@@ -324,22 +308,16 @@ func (p *Processor) processFile(filename, outPath string) (int64, error) {
 		return 0, fmt.Errorf("closing input file: %w", err)
 	}
 
-	if err := os.Rename(tmpName, outPath); err != nil {
+	if err := os.Rename(tc.TmpName, outPath); err != nil {
 		return 0, fmt.Errorf("renaming output file: %w", err)
 	}
 
-	if p.cfg.PreserveTimestamps {
-		if err := os.Chtimes(outPath, info.ModTime(), info.ModTime()); err != nil {
-			return 0, fmt.Errorf("preserving timestamps: %w", err)
-		}
-	}
-
-	outInfo, err := os.Stat(outPath)
+	size, err = fileutil.FinalizeOutput(outPath, p.cfg.PreserveTimestamps, tc.SrcInfo.ModTime())
 	if err != nil {
-		return 0, fmt.Errorf("stat output %q: %w", outPath, err)
+		return 0, fmt.Errorf("finalizing output: %w", err)
 	}
 
-	return outInfo.Size(), nil
+	return size, nil
 }
 
 // outputPath generates the output file path based on the input filename
