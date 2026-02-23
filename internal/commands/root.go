@@ -40,7 +40,7 @@ Provides commands for key generation, encryption, and decryption.`
 	root.Flags().Bool("stats", false, "Print processing statistics after completion")
 	root.Flags().Bool("preserve-timestamps", false, "Preserve original file modification times")
 
-	root.AddCommand(NewEncryptCommand(cfg), NewDecryptCommand(cfg), NewRedactCommand(cfg))
+	root.AddCommand(NewEncryptCommand(cfg), NewDecryptCommand(cfg), NewRedactCommand(cfg), NewCheckCommand(cfg))
 
 	return root
 }

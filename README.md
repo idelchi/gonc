@@ -169,6 +169,28 @@ gonc -k <key> --encrypt-ext .sensitive.enc decrypt .
 # Only processes *.sensitive.enc files
 ```
 
+#### `check` - Validate include/exclude patterns
+
+Verify that every `--include` and `--exclude` pattern matches at least one file.
+Catches typos and dead patterns before they silently skip files during encryption or decryption.
+Does not require `--key`.
+
+Examples:
+
+```sh
+# Check all patterns against current directory
+gonc check --include "*.go" --exclude "vendor/*" .
+
+# Load patterns from files
+gonc check --include-from whitelist.jsonc --exclude-from blacklist.jsonc .
+
+# Quiet mode — only show errors
+gonc -q check --include "*.go" --include "*.txtt" .
+# Output: include: *.txtt — 0 files (ERROR)
+```
+
+Exit code 0 if all patterns match at least one file. Exit code 1 if any pattern matches nothing.
+
 #### `redact` (alias: `red`) - Replace file contents
 
 Replace file contents with a fixed string. No encryption — a one-way
