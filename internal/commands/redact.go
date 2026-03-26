@@ -25,6 +25,7 @@ func NewRedactCommand(cfg *config.Config) *cobra.Command {
 	}
 
 	cmd.Flags().String("content", "<REDACTED>", "Replacement content for redacted files")
+	cmd.Flags().Bool("hash", false, "Append SHA-256 hash of the original file to the content")
 
 	return cmd
 }

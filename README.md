@@ -208,6 +208,11 @@ gonc redact .
 gonc redact --content "CLASSIFIED" ./secrets
 # Output: each file.enc contains "CLASSIFIED"
 
+# Redact with SHA-256 hash of the original file
+gonc redact --hash .
+# Output: file1.txt.enc contains "<REDACTED>:e3b0c44298fc..."
+# Same input file always produces the same hash — no spurious git diffs
+
 # Redact and delete originals
 gonc --delete redact .
 
@@ -215,9 +220,10 @@ gonc --delete redact .
 gonc --dry redact .
 ```
 
-| Flag        | Env            | Description         | Default      |
-| ----------- | -------------- | ------------------- | ------------ |
-| `--content` | `GONC_CONTENT` | Replacement content | `<REDACTED>` |
+| Flag        | Env            | Description                          | Default      |
+| ----------- | -------------- | ------------------------------------ | ------------ |
+| `--content` | `GONC_CONTENT` | Replacement content                  | `<REDACTED>` |
+| `--hash`    | `GONC_HASH`    | Append SHA-256 hash of original file | `false`      |
 
 ### Key Format
 

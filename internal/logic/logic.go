@@ -2,7 +2,10 @@
 package logic
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,7 +241,18 @@ func redactFile(filename, outPath string, cfg *config.Config) (size int64, err e
 
 	defer tc.CleanupOnError(&err)
 
-	if _, err = tc.TmpFile.WriteString(cfg.Content); err != nil {
+	content := cfg.Content
+
+	if cfg.Hash {
+		hash, hashErr := hashFile(filename)
+		if hashErr != nil {
+			return 0, fmt.Errorf("hashing file: %w", hashErr)
+		}
+
+		content = cfg.Content + ":" + hash
+	}
+
+	if _, err = tc.TmpFile.WriteString(content); err != nil {
 		return 0, fmt.Errorf("writing content: %w", err)
 	}
 
@@ -268,6 +282,23 @@ func redactFile(filename, outPath string, cfg *config.Config) (size int64, err e
 	}
 
 	return size, nil
+}
+
+// hashFile computes the SHA-256 hex digest of a file.
+func hashFile(filename string) (string, error) {
+	file, err := os.Open(filename) //nolint:gosec // filename is from resolved file list, not user input
+	if err != nil {
+		return "", fmt.Errorf("opening file: %w", err)
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", fmt.Errorf("reading file: %w", err)
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func printStats(scanned, excluded, processed, errored int, totalSize int64, duration time.Duration) {

@@ -60,6 +60,9 @@ type Config struct {
 	// Content string to write when redacting
 	Content string `mapstructure:"content"`
 
+	// Hash mode — append SHA-256 hash of the original file to the content
+	Hash bool `mapstructure:"hash"`
+
 	// Inline include glob patterns
 	Include []string `mapstructure:"include"`
 
